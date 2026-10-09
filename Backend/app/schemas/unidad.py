@@ -11,3 +11,7 @@ class UnidadResponse(BaseModel):
     materia_id: int
     numero_unidad: int
     nombre_tema: str
+
+class UnidadUpdate(BaseModel):
+    numero_unidad: int | None = None
+    nombre_tema: str | None = None

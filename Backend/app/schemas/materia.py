@@ -14,3 +14,12 @@ class MateriaResponse(BaseModel):
     nombre: str
     cuatrimestre: str
     unidades: list[UnidadResponse]
+
+class MateriaUpdate(BaseModel):
+    nombre: str
+
+class MateriaEditResponse(BaseModel):
+    id: int
+    usuario_id: int
+    nombre: str
+    cuatrimestre: str
