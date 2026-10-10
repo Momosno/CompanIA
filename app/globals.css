@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --bg-page: #F3ECE2;        /* Crema cálido tipo papel ahuesado para descansar la vista */
+  --bg-sidebar: #EAE0D3;     /* Barra lateral en un crema un tono más definido */
+  --bg-card: #FAF6F0;        /* Tarjetas en crema súper claro */
+  --border-color: #DCD0C0;   /* Bordes suavemente beige */
+  --text-primary: #2A2421;   /* Grafito cálido oscuro */
+  --text-secondary: #6E635B; /* Texto secundario suave */
+  --accent-purple: #5A4BD1;  /* Violeta de CompañÍA */
+  --accent-active: #DFD7FA;  /* Tono para la opción seleccionada */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+}
+
+/* ESTRUCTURA FIJA INDESTRUCTIBLE */
+.layout-wrapper {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px 16px;
+  z-index: 100;
+}
+
+.content-area {
+  margin-left: 220px;
+  flex: 1;
+  padding: 32px 40px;
+  max-width: 900px;
+  background-color: var(--bg-page);
+}
+
+.nav-link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.nav-link.active {
+  background-color: var(--accent-active);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.nav-link:hover:not(.active) {
+  background-color: #E2D7C7;
+  color: var(--text-primary);
+}
