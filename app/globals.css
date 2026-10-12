@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --bg-page: #F3ECE2;        /* Crema cálido tipo papel ahuesado para descansar la vista */
-  --bg-sidebar: #EAE0D3;     /* Barra lateral en un crema un tono más definido */
-  --bg-card: #FAF6F0;        /* Tarjetas en crema súper claro */
-  --border-color: #DCD0C0;   /* Bordes suavemente beige */
-  --text-primary: #2A2421;   /* Grafito cálido oscuro */
-  --text-secondary: #6E635B; /* Texto secundario suave */
+  --bg-page: #F3ECE2;        /* Color crema cálido */
+  --bg-sidebar: #EAE0D3;     /* Barra lateral en otro tono de crema */
+  --bg-card: #FAF6F0;        /* Tarjetas */
+  --border-color: #DCD0C0;   /* Bordes beige */
+  --text-primary: #2A2421;   /* Grafito */
+  --text-secondary: #6E635B; /* Texto secundario */
   --accent-purple: #5A4BD1;  /* Violeta de CompañÍA */
   --accent-active: #DFD7FA;  /* Tono para la opción seleccionada */
 }
@@ -24,7 +24,7 @@ body {
   min-height: 100vh;
 }
 
-/* ESTRUCTURA FIJA INDESTRUCTIBLE */
+/* Estructura fija */
 .layout-wrapper {
   display: flex;
   min-height: 100vh;
