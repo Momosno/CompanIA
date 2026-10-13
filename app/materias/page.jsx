@@ -1,6 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+const motivosError = {
+  OCR_NEEDED: 'El PDF contiene imágenes o escaneos sin texto seleccionable. Requiere procesamiento OCR.',
+  PASSWORD_PROTECTED: 'El archivo está protegido por contraseña.',
+  CORRUPTED_FILE: 'El archivo está dañado o tiene un formato no compatible.',
+  LIMIT_EXCEEDED: 'El archivo supera el límite de páginas o tamaño permitido.',
+};
 
 export default function MateriasPage() {
   const [materias, setMaterias] = useState([
@@ -67,7 +74,7 @@ export default function MateriasPage() {
               nombre: 'Apuntes escaneados de la clase 4.pdf',
               paginas: 10,
               estado: 'error',
-              errorDetalle: 'Parece una foto o escaneo sin texto seleccionable'
+              errorCode: 'OCR_NEEDED',
             },
           ],
         },
@@ -81,7 +88,54 @@ export default function MateriasPage() {
   ]);
 
   const [selectedMateriaId, setSelectedMateriaId] = useState(1);
+  const [mostrarErrores, setMostrarErrores] = useState(false);
+  const dialogRef = useRef(null);
   const materiaActiva = materias.find((m) => m.id === selectedMateriaId) || materias[0];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (mostrarErrores && !dialog.open) dialog.showModal();
+    if (!mostrarErrores && dialog.open) dialog.close();
+  }, [mostrarErrores]);
+
+  const actualizarApunte = (materiaId, unidadId, apunteId, actualizar) => {
+    setMaterias((materiasActuales) => materiasActuales.map((materia) => (
+      materia.id !== materiaId ? materia : {
+        ...materia,
+        unidades: materia.unidades.map((unidad) => (
+          unidad.id !== unidadId ? unidad : {
+            ...unidad,
+            apuntes: unidad.apuntes.map((apunte) => (
+              apunte.id !== apunteId ? apunte : actualizar(apunte)
+            )),
+          }
+        )),
+      }
+    )));
+  };
+
+  const reintentarProcesamiento = (archivo) => {
+    actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
+      ...apunte,
+      estado: 'procesando',
+      errorCode: undefined,
+      errorDetalle: undefined,
+    }));
+    setMostrarErrores(false);
+  };
+
+  const reemplazarArchivo = (archivo, nuevoArchivo) => {
+    actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
+      ...apunte,
+      nombre: nuevoArchivo.name,
+      estado: 'procesando',
+      errorCode: undefined,
+      errorDetalle: undefined,
+    }));
+    setMostrarErrores(false);
+  };
 
   const totalUnidades = materiaActiva.unidades.length;
   const totalApuntes = materiaActiva.unidades.reduce((acc, u) => acc + u.apuntes.length, 0);
@@ -94,10 +148,13 @@ export default function MateriasPage() {
       u.apuntes.forEach((a) => {
         if (a.estado === 'error') {
           apuntesConError.push({
+                  materiaId: m.id,
+                  unidadId: u.id,
+                  apunteId: a.id,
             materiaNombre: m.nombre,
             unidadNombre: `Unidad ${u.numero}: ${u.nombre}`,
             archivo: a.nombre,
-            detalle: a.errorDetalle,
+                  detalle: motivosError[a.errorCode] || a.errorDetalle || 'No se pudo procesar este archivo.',
           });
         }
       });
@@ -105,7 +162,7 @@ export default function MateriasPage() {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="subjects-page" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -157,7 +214,7 @@ export default function MateriasPage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="subjects-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '6px' }}>
             <span style={{
@@ -174,7 +231,7 @@ export default function MateriasPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="subjects-actions" style={{ display: 'flex', gap: '10px' }}>
           <button style={{
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
@@ -202,7 +259,7 @@ export default function MateriasPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+      <div className="subjects-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {materiaActiva.unidades.length === 0 ? (
             <div style={{
@@ -226,7 +283,7 @@ export default function MateriasPage() {
                 flexDirection: 'column',
                 gap: '12px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="subject-unit-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
                     Unidad {unidad.numero}: {unidad.nombre}
                   </h3>
@@ -239,7 +296,7 @@ export default function MateriasPage() {
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>No hay apuntes cargados en esta unidad.</p>
                   ) : (
                     unidad.apuntes.map((apunte) => (
-                      <div key={apunte.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                      <div key={apunte.id} className="subject-note-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
                         <div>
                           <p style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{apunte.nombre}</p>
                           <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{apunte.paginas} páginas</p>
@@ -274,12 +331,81 @@ export default function MateriasPage() {
             Crear unidad
           </button>
           {apuntesConError.length > 0 && (
-            <div style={{ backgroundColor: '#FDE8E8', border: '1px solid #F8B4B4', borderRadius: '8px', padding: '10px', color: '#9B1C1C' }}>
-              Hay {apuntesConError.length} archivo(s) con error de lectura.
-            </div>
+            <button
+              type="button"
+              onClick={() => setMostrarErrores(true)}
+              aria-haspopup="dialog"
+              aria-expanded={mostrarErrores}
+              className="w-full rounded-lg border border-[#F8B4B4] bg-[#FDE8E8] p-3 text-left text-sm font-semibold text-[#9B1C1C] transition-colors hover:bg-[#fbdede] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9B1C1C]"
+            >
+              Hay {apuntesConError.length} archivo(s) con error de lectura. Ver detalles
+            </button>
           )}
         </div>
       </div>
+
+      <dialog
+        ref={dialogRef}
+        onClose={() => setMostrarErrores(false)}
+        onClick={(event) => {
+          if (event.target === dialogRef.current) setMostrarErrores(false);
+        }}
+        aria-labelledby="errores-lectura-titulo"
+        className="pdf-error-dialog w-[min(92vw,44rem)] max-h-[85dvh] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-0 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/40"
+      >
+        <div className="pdf-error-dialog__header flex items-start justify-between gap-4 border-b border-[var(--border-color)]">
+          <div>
+            <h2 id="errores-lectura-titulo" className="text-lg font-bold">Archivos con error de lectura</h2>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Revisá el motivo y elegí cómo continuar.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMostrarErrores(false)}
+            className="pdf-error-dialog__close shrink-0 rounded-md border border-[var(--border-color)] text-sm font-semibold hover:bg-[#EBE0D2] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-purple)]"
+          >
+            Cerrar
+          </button>
+        </div>
+        <div className="pdf-error-dialog__list max-h-[calc(85dvh-5.5rem)] overflow-y-auto">
+          {apuntesConError.map((archivo) => (
+            <article key={archivo.apunteId} className="pdf-error-dialog__item rounded-lg border border-[var(--border-color)] bg-white/60">
+              <h3 className="break-words font-bold">{archivo.archivo}</h3>
+              <p className="pdf-error-dialog__item-meta text-sm text-[var(--text-secondary)]">
+                {archivo.materiaNombre} · {archivo.unidadNombre}
+              </p>
+              <p className="pdf-error-dialog__item-reason text-sm">{archivo.detalle}</p>
+              <div className="pdf-error-dialog__actions">
+                <button
+                  type="button"
+                  onClick={() => reintentarProcesamiento(archivo)}
+                  className="pdf-error-dialog__action rounded-md bg-[var(--accent-purple)] text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-purple)]"
+                >
+                  Reintentar procesamiento
+                </button>
+                <label
+                  htmlFor={`reemplazar-apunte-${archivo.apunteId}`}
+                  className="pdf-error-dialog__action cursor-pointer rounded-md border border-[var(--border-color)] text-sm font-semibold hover:bg-[#EBE0D2] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent-purple)]"
+                >
+                  Reemplazar archivo
+                  <input
+                    id={`reemplazar-apunte-${archivo.apunteId}`}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const nuevoArchivo = event.target.files?.[0];
+                      if (nuevoArchivo) reemplazarArchivo(archivo, nuevoArchivo);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </article>
+          ))}
+        </div>
+      </dialog>
     </div>
   );
 }

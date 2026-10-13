@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import MessageBubble from './MessageBubble';
 
 export default function PreguntarPage() {
   const materiasDisponibles = ['Análisis Matemático I', 'Física I'];
@@ -64,15 +65,15 @@ export default function PreguntarPage() {
           Preguntale a tus apuntes
         </h1>
 
-        <div style={{
+        <div className="ask-toolbar" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom: '1px solid var(--border-color)',
           paddingBottom: '12px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="ask-toolbar-controls" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="ask-subject-control" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Materia</span>
               <select
                 value={materiaActiva}
@@ -131,74 +132,9 @@ export default function PreguntarPage() {
             Hacé una pregunta sobre tus apuntes de {materiaActiva}.
           </div>
         ) : (
-          mensajes.map((m) => {
-            if (m.remitente === 'user') {
-              return (
-                <div key={m.id} style={{ alignSelf: 'flex-start' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>
-                    Vos
-                  </span>
-                  <div style={{
-                    backgroundColor: '#EBE0D2',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: 'var(--text-primary)',
-                    maxWidth: '650px'
-                  }}>
-                    {m.texto}
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={m.id}
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  maxWidth: '1100px'
-                }}
-              >
-                <p style={{ fontSize: '14px', lineHeight: '1.5', color: 'var(--text-primary)' }}>
-                  {m.texto}
-                </p>
-
-                {m.fuentes?.length > 0 && (
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
-                    {m.fuentes.map((fuente, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          backgroundColor: '#EFE9DD',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '6px',
-                          padding: '4px 8px',
-                          fontSize: '11px',
-                          color: 'var(--text-secondary)'
-                        }}
-                      >
-                        {fuente}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {m.sinFuente && (
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                    No hay fuente confiable dentro de tus apuntes para responder esto.
-                  </div>
-                )}
-              </div>
-            );
-          })
+          mensajes.map((message) => (
+            <MessageBubble key={message.id} message={message} />
+          ))
         )}
       </div>
 

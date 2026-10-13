@@ -1,40 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { estudiantesDemo as perfiles } from '../grupos/estudiantes';
 
 export default function UsuariosPage() {
-  const perfiles = [
-    {
-      id: 1,
-      nombre: 'Jimmy',
-      materias: 'Análisis Matemático I, Física I',
-      inicial: 'J',
-      color: 'var(--accent-purple)',
-      bgInicial: '#DFD7FA',
-      esUltimaVez: true,
-    },
-    {
-      id: 2,
-      nombre: 'Sofía',
-      materias: 'Álgebra Lineal, Química General',
-      inicial: 'S',
-      color: '#0D7A5F',
-      bgInicial: '#D0F2E7',
-      esUltimaVez: false,
-    },
-    {
-      id: 3,
-      nombre: 'Martín',
-      materias: 'Todavía no cargó materias',
-      inicial: 'M',
-      color: '#B45309',
-      bgInicial: '#FDE68A',
-      esUltimaVez: false,
-    },
-  ];
-
   return (
-    <div style={{
+    <div className="users-page" style={{
       display: 'flex',
       flexDirection: 'column',
       minHeight: '85vh',
@@ -69,7 +40,7 @@ export default function UsuariosPage() {
           </p>
         </div>
 
-        <div style={{
+        <div className="profile-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))',
           gap: '18px',

@@ -12,7 +12,7 @@ export default function Sidebar() {
   });
 
   const navItems = [
-    { name: 'Esta noche', href: '/' },
+    { name: 'Hoy', href: '/' },
     { name: 'Preguntar', href: '/preguntar' },
     { name: 'Mi semana', href: '/mi-semana' },
     { name: 'Practicar', href: '/practicar' },
@@ -22,13 +22,13 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div>
-        <div style={{ marginBottom: '32px' }}>
+        <div className="sidebar-brand" style={{ marginBottom: '32px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
             CompañIA
           </h1>
         </div>
 
-        <nav>
+        <nav className="sidebar-nav">
           {navItems.map((item) => {
             const isActive = item.href === '/'
               ? pathname === '/'
@@ -47,7 +47,7 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+      <div className="sidebar-user" style={{ paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
         <p style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-primary)' }}>
           {usuarioActivo.nombre}
         </p>

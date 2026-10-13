@@ -1,4 +1,5 @@
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import LayoutWrapper from './LayoutWrapper';
 
 export const metadata = {

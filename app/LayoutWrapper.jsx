@@ -10,12 +10,7 @@ export default function LayoutWrapper({ children }) {
 
   if (isAuthPage) {
     return (
-      <main className="notebook-page" style={{
-        minHeight: '100vh',
-        width: '100%',
-        padding: '32px 40px 32px 64px',
-        boxSizing: 'border-box'
-      }}>
+      <main className="notebook-page auth-layout">
         {children}
       </main>
     );

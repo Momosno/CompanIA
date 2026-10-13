@@ -74,7 +74,7 @@ export default function PracticarPage() {
         flexDirection: 'column',
         gap: '18px'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="practice-summary-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>
               {testInfo.mensajeAlerta}
@@ -111,6 +111,7 @@ export default function PracticarPage() {
             {temasRepaso.map((tema, idx) => (
               <div
                 key={tema.id}
+                className="practice-topic-row"
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -123,7 +124,7 @@ export default function PracticarPage() {
                   {tema.titulo}
                 </span>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="practice-topic-actions" style={{ display: 'flex', gap: '8px' }}>
                   <Link
                     href="/preguntar"
                     style={{

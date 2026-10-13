@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import SugerenciasEstudio from '../grupos/SugerenciasEstudio';
+import { estudiantesDemo } from '../grupos/estudiantes';
 
 const obtenerLunes = (fecha) => {
   const lunes = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
@@ -150,6 +152,13 @@ export default function MiSemanaPage() {
     }
   };
 
+  const usuarioActual = {
+    ...estudiantesDemo[0],
+    agenda: Object.entries(eventosPorDia).flatMap(([dia, eventos]) => (
+      eventos.map((evento) => ({ dia: Number(dia), inicio: evento.start, fin: evento.end }))
+    )),
+  };
+
   return (
     <div className="week-page">
       <header className="week-toolbar">
@@ -275,6 +284,8 @@ export default function MiSemanaPage() {
               ))}
             </div>
           </div>
+
+          <SugerenciasEstudio usuarioActual={usuarioActual} estudiantes={estudiantesDemo} />
         </aside>
       </div>
     </div>
