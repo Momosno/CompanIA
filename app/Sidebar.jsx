@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation';
 export default function Sidebar() {
   const pathname = usePathname();
 
-  // Estado del usuario activo (preparado para recibir la sesión de Supabase Auth)
   const [usuarioActivo] = useState({
     nombre: 'Jimmy',
   });
@@ -23,14 +22,12 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div>
-        {/* Marca / Logo */}
         <div style={{ marginBottom: '32px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
             CompañIA
           </h1>
         </div>
 
-        {/* Navegación interactiva */}
         <nav>
           {navItems.map((item) => {
             const isActive = item.href === '/'
@@ -50,13 +47,12 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* Perfil de usuario al pie */}
       <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
         <p style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-primary)' }}>
           {usuarioActivo.nombre}
         </p>
-        <Link 
-          href="/usuarios" 
+        <Link
+          href="/usuarios"
           style={{ fontSize: '12px', color: 'var(--accent-purple)', textDecoration: 'underline' }}
         >
           Cambiar de usuario

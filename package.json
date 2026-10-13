@@ -15,8 +15,11 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "eslint": "^9",
-    "eslint-config-next": "^14.2.35",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^16.4.0",
     "tailwindcss": "^4"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
   }
 }

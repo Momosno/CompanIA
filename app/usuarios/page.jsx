@@ -11,7 +11,7 @@ export default function UsuariosPage() {
       inicial: 'J',
       color: 'var(--accent-purple)',
       bgInicial: '#DFD7FA',
-      esUltimaVez: true, // Indicador de última sesión
+      esUltimaVez: true,
     },
     {
       id: 2,
@@ -25,7 +25,7 @@ export default function UsuariosPage() {
     {
       id: 3,
       nombre: 'Martín',
-      materias: 'Todavía no cargó materias', // Placeholder dinámico para backend
+      materias: 'Todavía no cargó materias',
       inicial: 'M',
       color: '#B45309',
       bgInicial: '#FDE68A',
@@ -34,20 +34,18 @@ export default function UsuariosPage() {
   ];
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
       minHeight: '85vh',
       maxWidth: '1100px',
       margin: '0 auto',
       justifyContent: 'space-between'
     }}>
-      
-      {/* 1. Header con Nombre/Logo de CompañÍA */}
       <div>
-        <span style={{ 
-          fontSize: '22px', 
-          fontWeight: 'bold', 
+        <span style={{
+          fontSize: '22px',
+          fontWeight: 'bold',
           color: 'var(--text-primary)',
           letterSpacing: '-0.5px'
         }}>
@@ -55,16 +53,13 @@ export default function UsuariosPage() {
         </span>
       </div>
 
-      {/* 2. Bloque Central: Título y Tarjetas de Usuarios */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
         gap: '36px',
         margin: '40px 0'
       }}>
-        
-        {/* Título y Subtítulo según Wireframe */}
         <div style={{ textAlign: 'center' }}>
           <h1 style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>
             ¿Quién estudia hoy?
@@ -74,14 +69,12 @@ export default function UsuariosPage() {
           </p>
         </div>
 
-        {/* Fila de 4 tarjetas horizontales */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))', 
-          gap: '18px', 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))',
+          gap: '18px',
           width: '100%'
         }}>
-          
           {perfiles.map((p) => (
             <Link
               key={p.id}
@@ -101,7 +94,6 @@ export default function UsuariosPage() {
                 position: 'relative'
               }}
             >
-              {/* Etiqueta "La última vez" para el usuario activo más reciente */}
               {p.esUltimaVez && (
                 <span style={{
                   position: 'absolute',
@@ -118,7 +110,6 @@ export default function UsuariosPage() {
                 </span>
               )}
 
-              {/* Avatar circular */}
               <div style={{
                 width: '64px',
                 height: '64px',
@@ -136,15 +127,12 @@ export default function UsuariosPage() {
                 {p.inicial}
               </div>
 
-              {/* Nombre de usuario */}
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '4px' }}>
                   {p.nombre}
                 </h2>
-                
-                {/* Materias o estado pendiente */}
-                <p style={{ 
-                  fontSize: '12px', 
+                <p style={{
+                  fontSize: '12px',
                   color: p.materias.includes('Todavía no') ? 'var(--text-secondary)' : 'var(--text-primary)',
                   fontStyle: p.materias.includes('Todavía no') ? 'italic' : 'normal',
                   lineHeight: '1.4'
@@ -153,7 +141,6 @@ export default function UsuariosPage() {
                 </p>
               </div>
 
-              {/* Botón de ingreso */}
               <span style={{
                 marginTop: 'auto',
                 backgroundColor: '#EBE0D2',
@@ -168,8 +155,9 @@ export default function UsuariosPage() {
             </Link>
           ))}
 
-          {/* 4ta Tarjeta: Crear un usuario nuevo */}
-          <div style={{
+          <Link href="/login?modo=registro" style={{
+            textDecoration: 'none',
+            color: 'inherit',
             backgroundColor: 'transparent',
             border: '2px dashed var(--border-color)',
             borderRadius: '14px',
@@ -202,22 +190,21 @@ export default function UsuariosPage() {
                 Crear un usuario nuevo
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Configurá tus materias y horarios
+                Creá tu cuenta de prueba
               </p>
             </div>
-          </div>
-
+          </Link>
         </div>
-
       </div>
 
-      {/* 3. Pie de página descriptivo según Wireframe */}
       <div style={{ textAlign: 'center', paddingBottom: '16px' }}>
         <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-          ¿No estás en esta lista? Creá tu usuario y empezá a cargar tus materias.
+          ¿Ya tenés una cuenta?{' '}
+          <Link href="/login" style={{ color: 'var(--accent-purple)', fontWeight: '700' }}>
+            Iniciá sesión
+          </Link>
         </p>
       </div>
-
     </div>
   );
 }

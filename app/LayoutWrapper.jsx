@@ -5,17 +5,15 @@ import Sidebar from './Sidebar';
 
 export default function LayoutWrapper({ children }) {
   const pathname = usePathname();
-  
-  // Oculta sidebar y márgenes en cualquier vista de selección o gestión de usuario
-  const isAuthPage = pathname.startsWith('/usuarios');
+
+  const isAuthPage = pathname.startsWith('/usuarios') || pathname.startsWith('/login');
 
   if (isAuthPage) {
     return (
-      <main style={{ 
-        minHeight: '100vh', 
-        width: '100%', 
-        backgroundColor: 'var(--bg-page)', 
-        padding: '32px 40px',
+      <main className="notebook-page" style={{
+        minHeight: '100vh',
+        width: '100%',
+        padding: '32px 40px 32px 64px',
         boxSizing: 'border-box'
       }}>
         {children}
@@ -23,11 +21,10 @@ export default function LayoutWrapper({ children }) {
     );
   }
 
-  // Estructura general para el resto de la aplicación
   return (
     <div className="layout-wrapper">
       <Sidebar />
-      <main className="content-area">
+      <main className={`content-area ${pathname === '/' ? 'home-content-area' : ''} ${pathname === '/mi-semana' ? 'week-content-area' : ''}`}>
         {children}
       </main>
     </div>
