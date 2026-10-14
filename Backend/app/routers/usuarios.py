@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse
-from app.services.usuarios import crear_usuario, listar_usuarios, buscar_usuario
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate
+from app.services.usuarios import (
+    crear_usuario, listar_usuarios, buscar_usuario, editar_usuario, eliminar_usuario,
+)
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
 
@@ -18,3 +20,14 @@ def obtener(usuario_id: int):
     if usuario is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return usuario
+@router.put("/{usuario_id}", response_model=UsuarioResponse)
+def editar(usuario_id: int, usuario: UsuarioUpdate):
+    resultado = editar_usuario(usuario_id, usuario.nombre)
+    if resultado is None:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return resultado
+
+@router.delete("/{usuario_id}", status_code=204)
+def eliminar(usuario_id: int):
+    if not eliminar_usuario(usuario_id):
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")

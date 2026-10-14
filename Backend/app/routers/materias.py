@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.materia import MateriaCreate, MateriaResponse, MateriaUpdate, MateriaEditResponse
-from app.services.materias import crear_materia, listar_materias, editar_materia
 from app.schemas.unidad import UnidadCreate, UnidadResponse, UnidadUpdate
-from app.services.materias import crear_materia, listar_materias, editar_materia, agregar_unidad, editar_unidad, eliminar_unidad, eliminar_materia
+from app.services.materias import (
+    crear_materia, listar_materias, buscar_materia, editar_materia,
+    agregar_unidad, buscar_unidad, editar_unidad, eliminar_unidad, eliminar_materia,
+)
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/materias", tags=["materias"])
 
@@ -17,6 +19,20 @@ def crear(usuario_id: int, materia: MateriaCreate):
 @router.get("/", response_model=list[MateriaResponse])
 def listar(usuario_id: int):
     return listar_materias(usuario_id)
+
+@router.get("/{materia_id}", response_model=MateriaResponse)
+def obtener(usuario_id: int, materia_id: int):
+    resultado = buscar_materia(usuario_id, materia_id)
+    if resultado is None:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+    return resultado
+
+@router.get("/{materia_id}/unidades/{unidad_id}", response_model=UnidadResponse)
+def obtener_unidad(usuario_id: int, materia_id: int, unidad_id: int):
+    resultado = buscar_unidad(usuario_id, materia_id, unidad_id)
+    if resultado is None:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+    return resultado
 
 @router.put("/{materia_id}", response_model=MateriaEditResponse)
 def editar(usuario_id: int, materia_id: int, materia: MateriaUpdate):

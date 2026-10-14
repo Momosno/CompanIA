@@ -34,6 +34,36 @@ def listar_materias(usuario_id: int):
     )
     return response.data
 
+def buscar_materia(usuario_id: int, materia_id: int):
+    response = (
+        supabase.table("materias")
+        .select("*, unidades(*)")
+        .eq("id", materia_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+def buscar_unidad(usuario_id: int, materia_id: int, unidad_id: int):
+    materia = (
+        supabase.table("materias")
+        .select("id")
+        .eq("id", materia_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    if not materia.data:
+        return None  # la materia no existe o no es de este usuario
+
+    response = (
+        supabase.table("unidades")
+        .select("*")
+        .eq("id", unidad_id)
+        .eq("materia_id", materia_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
 def editar_materia(usuario_id: int, materia_id: int, nombre: str):
     try:
         response = (
