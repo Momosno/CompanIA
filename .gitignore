@@ -1,0 +1,7 @@
+.env
+chroma_db/
+*.pdf
+resumen.md
+notas_de_estudio.txt
+__pycache__/
+02-Funciones.pdf
