@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+
+const MAX_FILE_SIZE_MB = 25;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 const motivosError = {
   OCR_NEEDED: 'El PDF contiene imágenes o escaneos sin texto seleccionable. Requiere procesamiento OCR.',
   PASSWORD_PROTECTED: 'El archivo está protegido por contraseña.',
@@ -89,6 +93,7 @@ export default function MateriasPage() {
 
   const [selectedMateriaId, setSelectedMateriaId] = useState(1);
   const [mostrarErrores, setMostrarErrores] = useState(false);
+  const [errorValidacion, setErrorValidacion] = useState(null);
   const dialogRef = useRef(null);
   const materiaActiva = materias.find((m) => m.id === selectedMateriaId) || materias[0];
 
@@ -99,6 +104,29 @@ export default function MateriasPage() {
     if (mostrarErrores && !dialog.open) dialog.showModal();
     if (!mostrarErrores && dialog.open) dialog.close();
   }, [mostrarErrores]);
+
+  
+  const validarArchivoPDF = (archivo) => {
+    if (!archivo) return { valido: false, error: 'No se seleccionó ningún archivo.' };
+
+    const esPdf = archivo.type === 'application/pdf' || archivo.name.toLowerCase().endsWith('.pdf');
+    if (!esPdf) {
+      return {
+        valido: false,
+        error: `"${archivo.name}" no es un documento PDF válido. Solo se admiten archivos .pdf`,
+      };
+    }
+
+    if (archivo.size > MAX_FILE_SIZE_BYTES) {
+      const pesoMB = (archivo.size / (1024 * 1024)).toFixed(1);
+      return {
+        valido: false,
+        error: `"${archivo.name}" pesa ${pesoMB} MB y supera el límite máximo permitido de ${MAX_FILE_SIZE_MB} MB.`,
+      };
+    }
+
+    return { valido: true };
+  };
 
   const actualizarApunte = (materiaId, unidadId, apunteId, actualizar) => {
     setMaterias((materiasActuales) => materiasActuales.map((materia) => (
@@ -127,6 +155,13 @@ export default function MateriasPage() {
   };
 
   const reemplazarArchivo = (archivo, nuevoArchivo) => {
+    const validacion = validarArchivoPDF(nuevoArchivo);
+    if (!validacion.valido) {
+      setErrorValidacion(validacion.error);
+      return;
+    }
+
+    setErrorValidacion(null);
     actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
       ...apunte,
       nombre: nuevoArchivo.name,
@@ -135,6 +170,39 @@ export default function MateriasPage() {
       errorDetalle: undefined,
     }));
     setMostrarErrores(false);
+  };
+
+  
+  const agregarApunteAUnidad = (unidadId, archivo) => {
+    const validacion = validarArchivoPDF(archivo);
+    if (!validacion.valido) {
+      setErrorValidacion(validacion.error);
+      return;
+    }
+
+    setErrorValidacion(null);
+    const nuevoApunte = {
+      id: Date.now(),
+      nombre: archivo.name,
+      paginas: 1,
+      estado: 'procesando',
+    };
+
+    setMaterias((prev) =>
+      prev.map((materia) => {
+        if (materia.id !== selectedMateriaId) return materia;
+        return {
+          ...materia,
+          unidades: materia.unidades.map((u) => {
+            if (u.id !== unidadId) return u;
+            return {
+              ...u,
+              apuntes: [...u.apuntes, nuevoApunte],
+            };
+          }),
+        };
+      })
+    );
   };
 
   const totalUnidades = materiaActiva.unidades.length;
@@ -148,13 +216,13 @@ export default function MateriasPage() {
       u.apuntes.forEach((a) => {
         if (a.estado === 'error') {
           apuntesConError.push({
-                  materiaId: m.id,
-                  unidadId: u.id,
-                  apunteId: a.id,
+            materiaId: m.id,
+            unidadId: u.id,
+            apunteId: a.id,
             materiaNombre: m.nombre,
             unidadNombre: `Unidad ${u.numero}: ${u.nombre}`,
             archivo: a.nombre,
-                  detalle: motivosError[a.errorCode] || a.errorDetalle || 'No se pudo procesar este archivo.',
+            detalle: motivosError[a.errorCode] || a.errorDetalle || 'No se pudo procesar este archivo.',
           });
         }
       });
@@ -163,6 +231,8 @@ export default function MateriasPage() {
 
   return (
     <div className="subjects-page" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      
+      {/* Selector superior de materias */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -179,6 +249,7 @@ export default function MateriasPage() {
               onClick={() => {
                 setSelectedMateriaId(m.id);
                 setUnidadDestino(m.unidades[0]?.id || '');
+                setErrorValidacion(null);
               }}
               style={{
                 backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
@@ -214,6 +285,45 @@ export default function MateriasPage() {
         </button>
       </div>
 
+      {/* Banner de error de validación preventiva (ej. > 25 MB o no PDF) */}
+      {errorValidacion && (
+        <div style={{
+          backgroundColor: '#FDE8E8',
+          border: '1px solid #F8B4B4',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          color: '#9B1C1C',
+          fontSize: '13px',
+          fontWeight: '500'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>⚠️</span>
+            <span>{errorValidacion}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorValidacion(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#9B1C1C',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              padding: '2px 6px'
+            }}
+            title="Cerrar aviso"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Encabezado de la materia activa */}
       <div className="subjects-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '6px' }}>
@@ -227,7 +337,7 @@ export default function MateriasPage() {
             </span>
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            {totalUnidades} {totalUnidades === 1 ? 'unidad' : 'unidades'} · {totalApuntes} {totalApuntes === 1 ? 'apunte cargado' : 'apuntes cargados'}
+            {totalUnidades} {totalUnidades === 1 ? 'unidad' : 'unidades'} · {totalApuntes} {totalApuntes === 1 ? 'apunte cargado' : 'apuntes cargados'} · Máx. 25 MB por archivo
           </p>
         </div>
 
@@ -259,7 +369,10 @@ export default function MateriasPage() {
         </div>
       </div>
 
+      {/* Disposición en dos columnas */}
       <div className="subjects-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+        
+        {/* Columna izquierda: Unidades y apuntes */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {materiaActiva.unidades.length === 0 ? (
             <div style={{
@@ -287,10 +400,37 @@ export default function MateriasPage() {
                   <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
                     Unidad {unidad.numero}: {unidad.nombre}
                   </h3>
-                  <button style={{ backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}>
+
+                  {/* Botón para agregar apunte directo a esta unidad con validación */}
+                  <label
+                    htmlFor={`agregar-apunte-${unidad.id}`}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      display: 'inline-block'
+                    }}
+                  >
                     Agregar apunte
-                  </button>
+                    <input
+                      id={`agregar-apunte-${unidad.id}`}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) agregarApunteAUnidad(unidad.id, file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
                 </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {unidad.apuntes.length === 0 ? (
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>No hay apuntes cargados en esta unidad.</p>
@@ -322,14 +462,49 @@ export default function MateriasPage() {
           )}
         </div>
 
+        {/* Columna derecha: Acciones rápidas y alertas */}
         <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>Acciones rápidas</h3>
-          <button style={{ backgroundColor: '#EBE0D2', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 10px', fontWeight: '600', cursor: 'pointer' }}>
+          
+          {/* Cargar apuntes (asigna a la unidad seleccionada o primera unidad) */}
+          <label
+            htmlFor="cargar-apuntes-rapido"
+            style={{
+              backgroundColor: '#EBE0D2',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '8px 10px',
+              fontWeight: '600',
+              fontSize: '13px',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              display: 'block'
+            }}
+          >
             Cargar apuntes
-          </button>
+            <input
+              id="cargar-apuntes-rapido"
+              type="file"
+              accept="application/pdf,.pdf"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                const destino = unidadDestino || materiaActiva.unidades[0]?.id;
+                if (!destino) {
+                  setErrorValidacion('Primero debés crear una unidad para poder subir apuntes.');
+                  return;
+                }
+                if (file) agregarApunteAUnidad(destino, file);
+                e.target.value = '';
+              }}
+            />
+          </label>
+
           <button style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 10px', fontWeight: '600', cursor: 'pointer' }}>
             Crear unidad
           </button>
+
           {apuntesConError.length > 0 && (
             <button
               type="button"
@@ -344,6 +519,7 @@ export default function MateriasPage() {
         </div>
       </div>
 
+      {/* Modal para ver y corregir archivos con error */}
       <dialog
         ref={dialogRef}
         onClose={() => setMostrarErrores(false)}
@@ -357,7 +533,7 @@ export default function MateriasPage() {
           <div>
             <h2 id="errores-lectura-titulo" className="text-lg font-bold">Archivos con error de lectura</h2>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              Revisá el motivo y elegí cómo continuar.
+              Revisá el motivo y elegí cómo continuar (máx. 25 MB por archivo).
             </p>
           </div>
           <button
