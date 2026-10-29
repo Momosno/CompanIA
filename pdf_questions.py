@@ -1,6 +1,6 @@
 import dotenv
 from langchain_anthropic import ChatAnthropic
-from vectorstore import vectorstore
+from Backend.app.ia.vectorstore import vectorstore
 
 dotenv.load_dotenv()
 model = ChatAnthropic(model="claude-haiku-5-5", max_tokens=500)
