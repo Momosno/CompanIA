@@ -94,8 +94,48 @@ export default function MateriasPage() {
   const [selectedMateriaId, setSelectedMateriaId] = useState(1);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState(null);
+  const [conectadoBackend, setConectadoBackend] = useState(false);
   const dialogRef = useRef(null);
   const materiaActiva = materias.find((m) => m.id === selectedMateriaId) || materias[0];
+
+  const cargarDatos = () => {
+    Promise.all([
+      fetch('http://localhost:8000/usuarios/1/materias/').then(r => r.ok ? r.json() : []),
+      fetch('http://localhost:8000/usuarios/1/documentos/').then(r => r.ok ? r.json() : [])
+    ])
+    .then(([materiasData, documentosData]) => {
+      if (materiasData && materiasData.length > 0) {
+        const materiasAdaptadas = materiasData.map((m) => ({
+          id: m.id,
+          nombre: m.nombre,
+          cuatrimestre: m.cuatrimestre,
+          unidades: (m.unidades || []).map((u) => ({
+            id: u.id,
+            numero: u.numero_unidad,
+            nombre: u.nombre_tema,
+            apuntes: (documentosData || [])
+              .filter((doc) => doc.materia_id === m.id && (doc.unidad_id === u.id || (!doc.unidad_id && u.numero_unidad === 1)))
+              .map((doc) => ({
+                id: doc.id,
+                nombre: doc.nombre_original,
+                paginas: doc.paginas || 1,
+                estado: doc.estado === 'ready' ? 'listo' : doc.estado === 'error' ? 'error' : 'procesando'
+              }))
+          }))
+        }));
+        setMaterias(materiasAdaptadas);
+        setSelectedMateriaId(materiasAdaptadas[0].id);
+        setConectadoBackend(true);
+      }
+    })
+    .catch((err) => {
+      console.warn('Error al cargar datos desde la API:', err);
+    });
+  };
+
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -203,6 +243,27 @@ export default function MateriasPage() {
         };
       })
     );
+
+    // Enviar archivo al backend de FastAPI
+    const formData = new FormData();
+    formData.append('materia_id', selectedMateriaId);
+    if (unidadId) formData.append('unidad_id', unidadId);
+    formData.append('archivo', archivo);
+
+    fetch('http://localhost:8000/usuarios/1/documentos/', {
+      method: 'POST',
+      body: formData,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Error al subir el archivo');
+        return res.json();
+      })
+      .then(() => {
+        setTimeout(cargarDatos, 1000);
+      })
+      .catch((err) => {
+        console.error('Error al subir documento al backend:', err);
+      });
   };
 
   const totalUnidades = materiaActiva.unidades.length;
