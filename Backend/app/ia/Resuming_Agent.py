@@ -1,8 +1,4 @@
-import re
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_anthropic import ChatAnthropic
-from langchain_community.document_loaders import PyPDFLoader
-from pdf_parser import cargar_pdf
 import dotenv
 
 template = """
@@ -82,6 +78,8 @@ Dos o tres oraciones con lo esencial que no puede faltar el día del examen.
 dotenv.load_dotenv()
 model = ChatAnthropic(model="claude-haiku-5-5", max_tokens=10000)
 
+MAX_CHARS_NOTAS = 300_000  # tope de notas que entran en la llamada final
+
 def resumir_documento(docs):
     # Cargar las variables de entorno desde el archivo .env
     
@@ -100,19 +98,23 @@ def resumir_documento(docs):
     respuesta = model.batch(entrada, config={"max_concurrency":3})
     notas = [r.text for r in respuesta]
 
+    if sum(len(n) for n in notas) > MAX_CHARS_NOTAS:
+        raise ValueError("El documento es demasiado largo para resumirlo de una sola vez")
+
     resumen = model.invoke([
         ("system", template2),
         ("human", "\n\n".join(notas))
     ])
-    print(resumen.response_metadata.get("stop_reason"))
-    print(resumen.usage_metadata)
-    print(resumen.content)
-    print(len(notas), [len(n) for n in notas])
-    with open("resumen.md", "w", encoding="utf-8") as f:
-        f.write(resumen.text)
+    if not resumen.text.strip():
+        raise ValueError("El modelo no devolvió texto (stop_reason: %s)" % resumen.response_metadata.get("stop_reason"))
 
     return resumen.text
-    
+
+
 if __name__ == "__main__":
+    # prueba local, desde Backend/:  python -m app.ia.Resuming_Agent
+    from app.ia.pdf_parser import cargar_pdf
     docs = cargar_pdf("02-Funciones.pdf")
-    resumir_documento(docs)
+    resumen = resumir_documento(docs)
+    with open("resumen.md", "w", encoding="utf-8") as f:
+        f.write(resumen)

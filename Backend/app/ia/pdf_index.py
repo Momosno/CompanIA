@@ -1,5 +1,5 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from vectorstore import vectorstore
+from app.ia.vectorstore import vectorstore
 
 
 def indexar_documento(docs, documento_id):
@@ -12,6 +12,7 @@ def indexar_documento(docs, documento_id):
 
 
 if __name__ == "__main__":
-    from pdf_parser import cargar_pdf  # poné acá el nombre real de tu archivo
+    # prueba local, desde Backend/:  python -m app.ia.pdf_index
+    from app.ia.pdf_parser import cargar_pdf
     docs = cargar_pdf("02-Funciones.pdf")
     print(indexar_documento(docs, "prueba-1"))
