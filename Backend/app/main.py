@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import usuarios, materias, documentos
+
+from app.routers import documentos, materias, usuarios
 
 app = FastAPI(title="CompañÍA API")
 
@@ -17,10 +18,11 @@ app.include_router(usuarios.router)
 app.include_router(materias.router)
 app.include_router(documentos.router)
 
+
 @app.get("/")
 def health_check():
     return {
         "status": "ok",
         "message": "Backend de CompañIA funcionando correctamente",
-        "cors": "enabled"
+        "cors": "enabled",
     }

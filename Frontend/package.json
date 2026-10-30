@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.0",
     "tailwindcss": "^4"
   },
