@@ -46,23 +46,58 @@ export default function MessageBubble({ message }) {
         </ReactMarkdown>
       </div>
 
+      {/* Citas de fuentes (SCRUM-91) */}
       {message.fuentes && message.fuentes.length > 0 && (
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
-          {message.fuentes.map((fuente, index) => (
-            <div
-              key={`${message.id}-${index}`}
-              style={{
-                backgroundColor: '#EFE9DD',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                padding: '4px 8px',
-                fontSize: '11px',
-                color: 'var(--text-secondary)'
-              }}
-            >
-              {fuente}
-            </div>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px' }}>
+          <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Fuentes consultadas
+          </span>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {message.fuentes.map((fuente, index) => {
+              // Soporta formato objeto { documento, pagina } o texto plano tradicional
+              const esObjeto = typeof fuente === 'object' && fuente !== null;
+              const nombreDoc = esObjeto ? (fuente.documento || fuente.nombre || 'Documento') : fuente;
+              const numeroPagina = esObjeto ? (fuente.pagina || fuente.page) : null;
+
+              return (
+                <div
+                  key={`${message.id}-${index}`}
+                  style={{
+                    backgroundColor: '#F5EFEB',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '5px 10px',
+                    fontSize: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                  }}
+                >
+                  <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                    {nombreDoc}
+                  </span>
+
+                  {numeroPagina && (
+                    <span
+                      style={{
+                        backgroundColor: '#DFD7FA',
+                        color: '#4334A6',
+                        border: '1px solid #C5B8F0',
+                        borderRadius: '6px',
+                        padding: '1px 6px',
+                        fontSize: '10px',
+                        fontWeight: '700',
+                      }}
+                    >
+                      Pág. {numeroPagina}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
