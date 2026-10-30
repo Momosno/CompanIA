@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
+import { API_URL, getUsuarioActual } from '../lib/api';
 
 const MAX_FILE_SIZE_MB = 25;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -14,6 +14,7 @@ const motivosError = {
 };
 
 export default function MateriasPage() {
+  const [usuario] = useState(getUsuarioActual);
   const [materias, setMaterias] = useState([
     {
       id: 1,
@@ -97,11 +98,13 @@ export default function MateriasPage() {
   const [conectadoBackend, setConectadoBackend] = useState(false);
   const dialogRef = useRef(null);
   const materiaActiva = materias.find((m) => m.id === selectedMateriaId) || materias[0];
+  const [unidadDestino, setUnidadDestino] = useState(materiaActiva.unidades[0]?.id || '');
 
   const cargarDatos = () => {
+    if (!usuario) return;
     Promise.all([
-      fetch('http://localhost:8000/usuarios/1/materias/').then(r => r.ok ? r.json() : []),
-      fetch('http://localhost:8000/usuarios/1/documentos/').then(r => r.ok ? r.json() : [])
+      fetch(`${API_URL}/usuarios/${usuario.id}/materias/`).then(r => r.ok ? r.json() : []),
+      fetch(`${API_URL}/usuarios/${usuario.id}/documentos/`).then(r => r.ok ? r.json() : [])
     ])
     .then(([materiasData, documentosData]) => {
       if (materiasData && materiasData.length > 0) {
@@ -125,6 +128,7 @@ export default function MateriasPage() {
         }));
         setMaterias(materiasAdaptadas);
         setSelectedMateriaId(materiasAdaptadas[0].id);
+        setUnidadDestino(materiasAdaptadas[0].unidades[0]?.id || '');
         setConectadoBackend(true);
       }
     })
@@ -135,6 +139,7 @@ export default function MateriasPage() {
 
   useEffect(() => {
     cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el usuario no cambia mientras la página está abierta
   }, []);
 
   useEffect(() => {
@@ -232,7 +237,7 @@ export default function MateriasPage() {
     );
 
     // Petición al backend si está conectado
-    fetch(`http://localhost:8000/usuarios/1/documentos/${apunteId}`, {
+    fetch(`${API_URL}/usuarios/${usuario.id}/documentos/${apunteId}`, {
       method: 'DELETE',
     }).catch((err) => {
       console.warn('Backend desconectado. Apunte eliminado solo en el cliente local:', err);
@@ -286,7 +291,7 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
         if (unidadId) formData.append('unidad_id', unidadId);
         formData.append('archivo', archivo);
 
-        fetch('http://localhost:8000/usuarios/1/documentos/', {
+        fetch(`${API_URL}/usuarios/${usuario.id}/documentos/`, {
           method: 'POST',
           body: formData,
         })
@@ -311,8 +316,6 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
 
   const totalUnidades = materiaActiva.unidades.length;
   const totalApuntes = materiaActiva.unidades.reduce((acc, u) => acc + u.apuntes.length, 0);
-
-  const [unidadDestino, setUnidadDestino] = useState(materiaActiva.unidades[0]?.id || '');
 
   const apuntesConError = [];
   materias.forEach((m) => {

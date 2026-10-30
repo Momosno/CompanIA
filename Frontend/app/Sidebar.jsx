@@ -1,15 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export default function Sidebar() {
+export default function Sidebar({ usuario }) {
   const pathname = usePathname();
-
-  const [usuarioActivo] = useState({
-    nombre: 'Jimmy',
-  });
 
   const navItems = [
     { name: 'Hoy', href: '/' },
@@ -49,7 +44,7 @@ export default function Sidebar() {
 
       <div className="sidebar-user" style={{ paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
         <p style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-primary)' }}>
-          {usuarioActivo.nombre}
+          {usuario?.nombre}
         </p>
         <Link
           href="/usuarios"

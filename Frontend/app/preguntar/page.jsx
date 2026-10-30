@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import MessageBubble from './MessageBubble';
+import { API_URL, getUsuarioActual } from '../lib/api';
 
 export default function PreguntarPage() {
+  const [usuario] = useState(getUsuarioActual);
   const [materiasDisponibles, setMateriasDisponibles] = useState([
     'Análisis Matemático I',
     'Física I',
@@ -15,7 +17,8 @@ export default function PreguntarPage() {
 
   // Sincronización automática con las materias reales del backend
   useEffect(() => {
-    fetch('http://localhost:8000/usuarios/1/materias/')
+    if (!usuario) return;
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/`)
       .then((r) => (r.ok ? r.json() : []))
       .then((materiasData) => {
         if (materiasData && materiasData.length > 0) {
@@ -27,7 +30,7 @@ export default function PreguntarPage() {
       .catch((err) => {
         console.warn('Backend desconectado. Usando materias locales de prueba:', err);
       });
-  }, []);
+  }, [usuario]);
 
   // Conversaciones independientes por cada materia (SCRUM-29)
   const [conversaciones, setConversaciones] = useState({
