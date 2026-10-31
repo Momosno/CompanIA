@@ -1,0 +1,11 @@
+.env
+chroma_db/
+*.pdf
+resumen.md
+notas_de_estudio.txt
+__pycache__/
+02-Funciones.pdf
+node_modules/
+.next/
+next-env.d.ts
+test_documento.pdf
