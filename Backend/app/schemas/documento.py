@@ -48,3 +48,4 @@ class PreguntaMateriaResponse(BaseModel):
     fuentes: list[FuenteResponse]
     sin_fuente: bool
     restantes: int
+    complemento: str | None = None  # lo agregado por fuera de los apuntes

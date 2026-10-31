@@ -13,99 +13,35 @@ const motivosError = {
   LIMIT_EXCEEDED: 'El archivo supera el límite de páginas o tamaño permitido.',
 };
 
+const INTERVALO_ESTADO_MS = 3000;
+
+const estadoDeDocumento = (doc) => (
+  doc.estado === 'ready' ? 'listo' : doc.estado === 'error' ? 'error' : 'procesando'
+);
+
 export default function MateriasPage() {
   const [usuario] = useState(getUsuarioActual);
-  const [materias, setMaterias] = useState([
-    {
-      id: 1,
-      nombre: 'Análisis Matemático I',
-      unidades: [
-        {
-          id: 101,
-          numero: 1,
-          nombre: 'Números reales y funciones',
-          apuntes: [
-            { id: 1, nombre: 'Teoría de Funciones y Dominio.pdf', paginas: 18, estado: 'listo' },
-            { id: 2, nombre: 'Práctica 1 - Resueltos.pdf', paginas: 12, estado: 'listo' },
-          ],
-        },
-        {
-          id: 102,
-          numero: 2,
-          nombre: 'Límites y continuidad',
-          apuntes: [
-            { id: 3, nombre: 'Teórico Límites Cátedra.pdf', paginas: 24, estado: 'listo' },
-          ],
-        },
-        {
-          id: 103,
-          numero: 3,
-          nombre: 'Derivadas y aplicaciones',
-          apuntes: [
-            { id: 4, nombre: 'Apunte de cátedra unidad 3.pdf', paginas: 52, estado: 'listo' },
-            { id: 5, nombre: 'Tabla de derivadas y ejercicios.pdf', paginas: 8, estado: 'listo' },
-            { id: 6, nombre: 'Resumen parcial - Derivadas.pdf', paginas: 14, estado: 'procesando' },
-          ],
-        },
-        {
-          id: 104,
-          numero: 4,
-          nombre: 'Integrales',
-          apuntes: [],
-        },
-      ],
-    },
-    {
-      id: 2,
-      nombre: 'Física I',
-      unidades: [
-        {
-          id: 201,
-          numero: 1,
-          nombre: 'Cinemática',
-          apuntes: [
-            { id: 7, nombre: 'Guía Cinemática 2024.pdf', paginas: 16, estado: 'listo' },
-          ],
-        },
-        {
-          id: 202,
-          numero: 2,
-          nombre: 'Dinámica y Leyes de Newton',
-          apuntes: [
-            { id: 8, nombre: 'Teoría Dinámica.pdf', paginas: 22, estado: 'listo' },
-            { id: 9, nombre: 'Problemas resueltos unidad 2.pdf', paginas: 15, estado: 'listo' },
-            {
-              id: 10,
-              nombre: 'Apuntes escaneados de la clase 4.pdf',
-              paginas: 10,
-              estado: 'error',
-              errorCode: 'OCR_NEEDED',
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      nombre: 'Introducción a la Programación',
-      unidades: [],
-    },
-  ]);
-
-  const [selectedMateriaId, setSelectedMateriaId] = useState(1);
+  const [materias, setMaterias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(null);
+  const [formMateria, setFormMateria] = useState(null);
+  const [errorFormMateria, setErrorFormMateria] = useState(null);
+  const [selectedMateriaId, setSelectedMateriaId] = useState(null);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState(null);
   const [conectadoBackend, setConectadoBackend] = useState(false);
   const dialogRef = useRef(null);
   const materiaActiva = materias.find((m) => m.id === selectedMateriaId) || materias[0];
-  const [unidadDestino, setUnidadDestino] = useState(materiaActiva.unidades[0]?.id || '');
+  const [unidadDestino, setUnidadDestino] = useState('');
 
   const cargarDatos = () => {
     if (!usuario) return;
-    Promise.all([
-      fetch(`${API_URL}/usuarios/${usuario.id}/materias/`).then(r => r.ok ? r.json() : []),
-      fetch(`${API_URL}/usuarios/${usuario.id}/documentos/`).then(r => r.ok ? r.json() : [])
-    ])
+    const pedir = (ruta) => fetch(`${API_URL}/usuarios/${usuario.id}/${ruta}/`).then((r) => {
+      if (!r.ok) throw new Error(`Error al cargar ${ruta}`);
+      return r.json();
+    });
+
+    Promise.all([pedir('materias'), pedir('documentos')])
     .then(([materiasData, documentosData]) => {
       if (materiasData && materiasData.length > 0) {
         const materiasAdaptadas = materiasData.map((m) => ({
@@ -122,7 +58,7 @@ export default function MateriasPage() {
                 id: doc.id,
                 nombre: doc.nombre_original,
                 paginas: doc.paginas || 1,
-                estado: doc.estado === 'ready' ? 'listo' : doc.estado === 'error' ? 'error' : 'procesando'
+                estado: estadoDeDocumento(doc)
               }))
           }))
         }));
@@ -134,13 +70,48 @@ export default function MateriasPage() {
     })
     .catch((err) => {
       console.warn('Error al cargar datos desde la API:', err);
-    });
+      setErrorCarga('No pudimos cargar tus materias. Revisá que el backend esté corriendo.');
+    })
+    .finally(() => setCargando(false));
   };
 
   useEffect(() => {
     cargarDatos();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- el usuario no cambia mientras la página está abierta
   }, []);
+
+  // Los documentos reales tienen id de texto; los de ejemplo, numérico
+  const hayProcesando = materias.some((m) => m.unidades.some((u) => u.apuntes.some(
+    (a) => a.estado === 'procesando' && typeof a.id === 'string'
+  )));
+
+  // Actualiza solo los apuntes, para no cambiar la materia elegida ni pisar otras subidas
+  useEffect(() => {
+    if (!hayProcesando) return;
+
+    const intervalo = setInterval(() => {
+      fetch(`${API_URL}/usuarios/${usuario.id}/documentos/`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((documentos) => {
+          setMaterias((actuales) => actuales.map((materia) => ({
+            ...materia,
+            unidades: materia.unidades.map((unidad) => ({
+              ...unidad,
+              apuntes: unidad.apuntes.map((apunte) => {
+                const doc = documentos.find((d) => d.id === apunte.id);
+                if (!doc) return apunte;
+                return { ...apunte, paginas: doc.paginas || apunte.paginas, estado: estadoDeDocumento(doc) };
+              }),
+            })),
+          })));
+        })
+        .catch((err) => {
+          console.warn('No se pudo actualizar el estado de los apuntes:', err);
+        });
+    }, INTERVALO_ESTADO_MS);
+
+    return () => clearInterval(intervalo);
+  }, [hayProcesando, usuario]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -183,6 +154,20 @@ export default function MateriasPage() {
             apuntes: unidad.apuntes.map((apunte) => (
               apunte.id !== apunteId ? apunte : actualizar(apunte)
             )),
+          }
+        )),
+      }
+    )));
+  };
+
+  const quitarApunte = (materiaId, unidadId, apunteId) => {
+    setMaterias((materiasActuales) => materiasActuales.map((materia) => (
+      materia.id !== materiaId ? materia : {
+        ...materia,
+        unidades: materia.unidades.map((unidad) => (
+          unidad.id !== unidadId ? unidad : {
+            ...unidad,
+            apuntes: unidad.apuntes.filter((apunte) => apunte.id !== apunteId),
           }
         )),
       }
@@ -295,18 +280,19 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
           method: 'POST',
           body: formData,
         })
-          .then((res) => {
-            if (!res.ok) throw new Error('Error al subir el archivo');
-            return res.json();
+          .then(async (res) => {
+            const datos = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'Error al subir el archivo');
+            return datos;
           })
-          .then(() => {
-            setTimeout(cargarDatos, 1000);
+          .then((documento) => {
+            actualizarApunte(selectedMateriaId, unidadId, tempId, (a) => ({ ...a, id: documento.id }));
           })
           .catch((err) => {
-            console.warn('Backend desconectado o error, simulando éxito local:', err);
-            setTimeout(() => {
-              actualizarApunte(selectedMateriaId, unidadId, tempId, (a) => ({ ...a, estado: 'listo' }));
-            }, 1500);
+            console.warn('No se pudo subir el archivo:', err);
+            quitarApunte(selectedMateriaId, unidadId, tempId);
+            const motivo = err instanceof TypeError ? 'no hay conexión con el backend' : err.message;
+            setErrorValidacion(`No pudimos subir "${archivo.name}": ${motivo}.`);
           });
       } else {
         actualizarApunte(selectedMateriaId, unidadId, tempId, (a) => ({ ...a, progreso: p }));
@@ -314,31 +300,73 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
     }, 150);
   };
 
-  const totalUnidades = materiaActiva.unidades.length;
-  const totalApuntes = materiaActiva.unidades.reduce((acc, u) => acc + u.apuntes.length, 0);
+  const crearMateria = (e) => {
+    e.preventDefault();
+    setErrorFormMateria(null);
 
-  const apuntesConError = [];
-  materias.forEach((m) => {
-    m.unidades.forEach((u) => {
-      u.apuntes.forEach((a) => {
-        if (a.estado === 'error') {
-          apuntesConError.push({
-            materiaId: m.id,
-            unidadId: u.id,
-            apunteId: a.id,
-            materiaNombre: m.nombre,
-            unidadNombre: `Unidad ${u.numero}: ${u.nombre}`,
-            archivo: a.nombre,
-            detalle: motivosError[a.errorCode] || a.errorDetalle || 'No se pudo procesar este archivo.',
-          });
-        }
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: formMateria.nombre.trim(),
+        cuatrimestre: formMateria.cuatrimestre.trim(),
+        unidades: [{ numero_unidad: 1, nombre_tema: formMateria.tema.trim() }],
+      }),
+    })
+      .then(async (res) => {
+        const datos = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'No pudimos crear la materia.');
+        return datos;
+      })
+      .then((materia) => {
+        const nueva = {
+          id: materia.id,
+          nombre: materia.nombre,
+          cuatrimestre: materia.cuatrimestre,
+          unidades: materia.unidades.map((u) => ({
+            id: u.id,
+            numero: u.numero_unidad,
+            nombre: u.nombre_tema,
+            apuntes: [],
+          })),
+        };
+        setMaterias((prev) => [...prev, nueva]);
+        setSelectedMateriaId(nueva.id);
+        setUnidadDestino(nueva.unidades[0]?.id || '');
+        setErrorCarga(null);
+        setFormMateria(null);
+      })
+      .catch((err) => {
+        console.warn('No se pudo crear la materia:', err);
+        setErrorFormMateria(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
       });
-    });
-  });
+  };
 
-  return (
-    <div className="subjects-page" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
+  const estiloCampo = {
+    flex: '1 1 180px',
+    minWidth: 0,
+    backgroundColor: 'var(--bg-card)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '6px',
+    padding: '8px 10px',
+    fontSize: '13px',
+    color: 'var(--text-primary)',
+    outline: 'none',
+  };
+
+  const campoMateria = (campo, etiqueta, ejemplo) => (
+    <input
+      value={formMateria[campo]}
+      onChange={(e) => setFormMateria((prev) => ({ ...prev, [campo]: e.target.value }))}
+      placeholder={ejemplo}
+      aria-label={etiqueta}
+      required
+      style={estiloCampo}
+    />
+  );
+
+  const barraMaterias = (
+    <>
       {/* Selector superior de materias */}
       <div style={{
         display: 'flex',
@@ -376,21 +404,123 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
           );
         })}
 
-        <button style={{
-          backgroundColor: 'transparent',
-          border: '1px dashed var(--border-color)',
-          borderRadius: '8px',
-          padding: '8px 14px',
-          fontSize: '13px',
-          fontWeight: '600',
-          color: 'var(--accent-purple)',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-          marginLeft: '4px'
-        }}>
+        <button
+          type="button"
+          onClick={() => {
+            setErrorFormMateria(null);
+            setFormMateria({ nombre: '', cuatrimestre: '', tema: '' });
+          }}
+          style={{
+            backgroundColor: 'transparent',
+            border: '1px dashed var(--border-color)',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            fontSize: '13px',
+            fontWeight: '600',
+            color: 'var(--accent-purple)',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            marginLeft: '4px'
+          }}
+        >
           + Agregar materia
         </button>
       </div>
+
+      {formMateria && (
+        <form onSubmit={crearMateria} style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>Nueva materia</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {campoMateria('nombre', 'Nombre de la materia', 'Nombre (ej. Física I)')}
+            {campoMateria('cuatrimestre', 'Cuatrimestre', 'Cuatrimestre (ej. 1C 2026)')}
+            {campoMateria('tema', 'Tema de la primera unidad', 'Tema de la unidad 1')}
+          </div>
+          {errorFormMateria && (
+            <p role="alert" style={{ fontSize: '13px', color: '#9B1C1C' }}>{errorFormMateria}</p>
+          )}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="submit" style={{
+              backgroundColor: 'var(--accent-purple)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}>
+              Crear materia
+            </button>
+            <button type="button" onClick={() => setFormMateria(null)} style={{
+              backgroundColor: 'transparent',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: 'var(--text-primary)',
+              cursor: 'pointer'
+            }}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+    </>
+  );
+
+  if (!materiaActiva) {
+    return (
+      <div className="subjects-page" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {barraMaterias}
+        <div style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px dashed var(--border-color)',
+          borderRadius: '12px',
+          padding: '32px',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: errorCarga ? '#9B1C1C' : 'var(--text-secondary)'
+        }}>
+          {errorCarga || (cargando ? 'Cargando tus materias...' : 'Todavía no tenés materias. Creá la primera para subir tus apuntes.')}
+        </div>
+      </div>
+    );
+  }
+
+  const totalUnidades = materiaActiva.unidades.length;
+  const totalApuntes = materiaActiva.unidades.reduce((acc, u) => acc + u.apuntes.length, 0);
+
+  const apuntesConError = [];
+  materias.forEach((m) => {
+    m.unidades.forEach((u) => {
+      u.apuntes.forEach((a) => {
+        if (a.estado === 'error') {
+          apuntesConError.push({
+            materiaId: m.id,
+            unidadId: u.id,
+            apunteId: a.id,
+            materiaNombre: m.nombre,
+            unidadNombre: `Unidad ${u.numero}: ${u.nombre}`,
+            archivo: a.nombre,
+            detalle: motivosError[a.errorCode] || a.errorDetalle || 'No se pudo procesar este archivo.',
+          });
+        }
+      });
+    });
+  });
+
+  return (
+    <div className="subjects-page" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {barraMaterias}
 
       {/* Banner de error de validación preventiva (ej. > 25 MB o no PDF) */}
       {errorValidacion && (

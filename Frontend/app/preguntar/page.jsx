@@ -1,19 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble';
 import { API_URL, getUsuarioActual } from '../lib/api';
 
+const CLAVE_HISTORIAL = 'compania_chat_por_materia';
+const ERROR_CHAT = 'No pudimos responder tu pregunta. Probá de nuevo en unos minutos.';
+
 export default function PreguntarPage() {
   const [usuario] = useState(getUsuarioActual);
-  const [materiasDisponibles, setMateriasDisponibles] = useState([
-    'Análisis Matemático I',
-    'Física I',
-    'Introducción a la Programación',
-  ]);
-  const [materiaActiva, setMateriaActiva] = useState('Análisis Matemático I');
-  const [preguntasRestantes, setPreguntasRestantes] = useState(22);
+  const [materiasDisponibles, setMateriasDisponibles] = useState([]);
+  const [materiaId, setMateriaId] = useState(null);
+  const [preguntasRestantes, setPreguntasRestantes] = useState(null);
   const [inputPregunta, setInputPregunta] = useState('');
+  const [esperando, setEsperando] = useState(false);
+  const preguntaEnCurso = useRef(false);
+
+  // Al enviar y al recibir la respuesta baja hasta el final; en el resto de los casos no mueve la lectura
+  useEffect(() => {
+    if (!preguntaEnCurso.current) return;
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+    if (!esperando) preguntaEnCurso.current = false;
+  }, [esperando]);
 
   // Sincronización automática con las materias reales del backend
   useEffect(() => {
@@ -22,68 +30,39 @@ export default function PreguntarPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then((materiasData) => {
         if (materiasData && materiasData.length > 0) {
-          const nombres = materiasData.map((m) => m.nombre);
-          setMateriasDisponibles(nombres);
-          setMateriaActiva(nombres[0]);
+          setMateriasDisponibles(materiasData.map((m) => ({ id: m.id, nombre: m.nombre })));
+          setMateriaId(materiasData[0].id);
         }
       })
       .catch((err) => {
-        console.warn('Backend desconectado. Usando materias locales de prueba:', err);
+        console.warn('No se pudieron cargar las materias:', err);
       });
   }, [usuario]);
 
-  // Conversaciones independientes por cada materia (SCRUM-29)
-  const [conversaciones, setConversaciones] = useState({
-    'Análisis Matemático I': [
-      {
-        id: 1,
-        remitente: 'user',
-        texto: '¿Cuál es la diferencia entre continuidad y derivabilidad?',
-      },
-      {
-        id: 2,
-        remitente: 'assistant',
-        texto:
-          'Una función es continua en un punto si el límite existe y coincide con el valor de la función. Es derivable si, además, existe el límite del cociente incremental. Toda función derivable es continua, pero no al revés: |x| es continua en 0 y no es derivable en ese punto.',
-        fuentes: [
-          { documento: 'Apunte de cátedra unidad 3.pdf', pagina: 41 },
-          { documento: 'Apunte de cátedra unidad 3.pdf', pagina: 43 },
-        ],
-        sinFuente: false,
-      },
-      {
-        id: 3,
-        remitente: 'user',
-        texto: "¿Entra la regla de L'Hôpital en el parcial?",
-      },
-      {
-        id: 4,
-        remitente: 'assistant',
-        texto:
-          'Eso no aparece en tus apuntes de Análisis I, así que no te lo puedo confirmar. Consultalo con la cátedra, o subí el programa del parcial y te respondo desde ahí.',
-        fuentes: [],
-        sinFuente: true,
-      },
-    ],
-    'Física I': [
-      {
-        id: 5,
-        remitente: 'user',
-        texto: '¿Qué diferencia hay entre velocidad media y velocidad instantánea?',
-      },
-      {
-        id: 6,
-        remitente: 'assistant',
-        texto:
-          'Ni idea, no conozco el tema',
-        fuentes: [
-          { documento: 'Guía Cinemática 2024.pdf', pagina: 4 },
-        ],
-        sinFuente: false,
-      },
-    ],
-    'Introducción a la Programación': [],
-  });
+  // Cupo de hoy: se relee al volver a la ventana porque puede cambiar por fuera
+  // de esta pantalla (otra pestaña, la tabla o el cambio de día)
+  useEffect(() => {
+    if (!usuario) return;
+
+    const consultarCupo = () => {
+      fetch(`${API_URL}/usuarios/${usuario.id}/uso`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((uso) => {
+          if (uso) setPreguntasRestantes(uso.restantes);
+        })
+        .catch((err) => {
+          console.warn('No se pudo consultar el cupo diario:', err);
+        });
+    };
+
+    consultarCupo();
+    window.addEventListener('focus', consultarCupo);
+    return () => window.removeEventListener('focus', consultarCupo);
+  }, [usuario]);
+
+  // Conversaciones independientes por cada materia, indexadas por materia_id (SCRUM-29)
+  const [conversaciones, setConversaciones] = useState({});
+  const [historialCargado, setHistorialCargado] = useState(false);
 
   const [sessionId, setSessionId] = useState('');
 
@@ -91,7 +70,7 @@ export default function PreguntarPage() {
   useEffect(() => {
     setSessionId(Date.now().toString());
 
-    const historialGuardado = sessionStorage.getItem('compania_chat_sesion');
+    const historialGuardado = sessionStorage.getItem(CLAVE_HISTORIAL);
     if (historialGuardado) {
       try {
         setConversaciones(JSON.parse(historialGuardado));
@@ -99,43 +78,100 @@ export default function PreguntarPage() {
         console.warn('No se pudo restaurar el historial de sesión:', err);
       }
     }
+    setHistorialCargado(true);
   }, []);
 
   // Guardar en la sesión cada vez que se envía o limpia un mensaje (SCRUM-34)
   useEffect(() => {
-    sessionStorage.setItem('compania_chat_sesion', JSON.stringify(conversaciones));
-  }, [conversaciones]);
+    if (!historialCargado) return;
+    const sinPendientes = Object.fromEntries(
+      Object.entries(conversaciones).map(([id, lista]) => [id, lista.filter((m) => !m.pensando)])
+    );
+    sessionStorage.setItem(CLAVE_HISTORIAL, JSON.stringify(sinPendientes));
+  }, [conversaciones, historialCargado]);
 
   // Mensajes de la materia seleccionada actualmente
-  const mensajes = conversaciones[materiaActiva] || [];
+  const mensajes = conversaciones[materiaId] || [];
+  const nombreMateria = materiasDisponibles.find((m) => m.id === materiaId)?.nombre;
 
-  const limiteAlcanzado = preguntasRestantes <= 0;
+  const limiteAlcanzado = preguntasRestantes === 0;
 
-  const handlePreguntar = (e) => {
+  const handlePreguntar = async (e) => {
     e.preventDefault();
-    if (!inputPregunta.trim() || limiteAlcanzado) return;
+    const pregunta = inputPregunta.trim();
+    if (!pregunta || limiteAlcanzado || esperando || !materiaId) return;
 
-    
-    
+    // La materia puede cambiar mientras se espera la respuesta
+    const idMateria = materiaId;
+    const idPendiente = Date.now() + 1;
+
     const mensajeUsuario = {
       id: Date.now(),
       remitente: 'user',
-      texto: inputPregunta.trim(),
+      texto: pregunta,
+    };
+    const mensajePendiente = {
+      id: idPendiente,
+      remitente: 'assistant',
+      texto: 'Pensando…',
+      pensando: true,
     };
 
     setConversaciones((prev) => ({
       ...prev,
-      [materiaActiva]: [...(prev[materiaActiva] || []), mensajeUsuario],
+      [idMateria]: [...(prev[idMateria] || []), mensajeUsuario, mensajePendiente],
     }));
-
     setInputPregunta('');
-    setPreguntasRestantes((prev) => Math.max(0, prev - 1));
+    preguntaEnCurso.current = true;
+    setEsperando(true);
+
+    const reemplazarPendiente = (mensaje) => {
+      setConversaciones((prev) => ({
+        ...prev,
+        [idMateria]: (prev[idMateria] || []).flatMap((m) => {
+          if (m.id !== idPendiente) return [m];
+          return mensaje ? [{ ...mensaje, id: idPendiente, remitente: 'assistant' }] : [];
+        }),
+      }));
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/usuarios/${usuario.id}/materias/${idMateria}/preguntas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pregunta }),
+      });
+      const datos = await res.json().catch(() => ({}));
+
+      if (typeof datos.restantes === 'number') setPreguntasRestantes(datos.restantes);
+
+      if (res.status === 429) {
+        setPreguntasRestantes(0);
+        reemplazarPendiente(null);
+      } else if (!res.ok) {
+        reemplazarPendiente({
+          texto: typeof datos.detail === 'string' ? datos.detail : ERROR_CHAT,
+        });
+      } else {
+        reemplazarPendiente({
+          texto: datos.respuesta,
+          fuentes: datos.fuentes,
+          sinFuente: datos.sin_fuente,
+          complemento: datos.complemento,
+        });
+      }
+    } catch (err) {
+      console.warn('No se pudo enviar la pregunta:', err);
+      reemplazarPendiente({ texto: ERROR_CHAT });
+    } finally {
+      setEsperando(false);
+    }
   };
 
   const handleNuevaConsulta = () => {
     if (mensajes.length > 0) {
       const confirmar = window.confirm(
-        `¿Querés iniciar una nueva consulta en ${materiaActiva}? Se limpiará la conversación actual de esta materia.`
+        `¿Querés iniciar una nueva consulta en ${nombreMateria}? Se limpiará la conversación actual de esta materia.`
       );
       if (!confirmar) return;
     }
@@ -143,7 +179,7 @@ export default function PreguntarPage() {
     setSessionId(Date.now().toString());
     setConversaciones((prev) => ({
       ...prev,
-      [materiaActiva]: [],
+      [materiaId]: [],
     }));
   };
 
@@ -181,8 +217,8 @@ export default function PreguntarPage() {
             >
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Materia</span>
               <select
-                value={materiaActiva}
-                onChange={(e) => setMateriaActiva(e.target.value)}
+                value={materiaId ?? ''}
+                onChange={(e) => setMateriaId(Number(e.target.value))}
                 style={{
                   backgroundColor: 'var(--bg-card)',
                   border: '1px solid var(--border-color)',
@@ -195,8 +231,8 @@ export default function PreguntarPage() {
                 }}
               >
                 {materiasDisponibles.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                  <option key={m.id} value={m.id}>
+                    {m.nombre}
                   </option>
                 ))}
               </select>
@@ -208,7 +244,8 @@ export default function PreguntarPage() {
               color: limiteAlcanzado ? '#9B1C1C' : 'var(--text-secondary)',
               transition: 'color 0.2s ease',
             }}>
-              {limiteAlcanzado ? 'Límite diario alcanzado (0 preguntas)' : `Te quedan ${preguntasRestantes} preguntas por hoy`}
+              {limiteAlcanzado && 'Límite diario alcanzado (0 preguntas)'}
+              {preguntasRestantes > 0 && `Te quedan ${preguntasRestantes} preguntas por hoy`}
             </span>
           </div>
 
@@ -252,7 +289,9 @@ export default function PreguntarPage() {
               fontSize: '14px',
             }}
           >
-            Hacé una pregunta sobre tus apuntes de {materiaActiva}.
+            {nombreMateria
+              ? `Hacé una pregunta sobre tus apuntes de ${nombreMateria}.`
+              : 'Todavía no tenés materias. Creá una para poder preguntar sobre tus apuntes.'}
           </div>
         ) : (
           mensajes.map((message) => (
@@ -261,7 +300,17 @@ export default function PreguntarPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--border-color)', paddingTop: '16px', gap: '10px' }}>
+      <div style={{
+        position: 'sticky',
+        bottom: 0,
+        zIndex: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        padding: '16px 0',
+        borderTop: '1px solid var(--border-color)',
+        backgroundColor: '#efe9df',
+      }}>
         {limiteAlcanzado && (
           <div style={{
             backgroundColor: '#FDE8E8',
@@ -291,7 +340,7 @@ export default function PreguntarPage() {
           <input
             value={inputPregunta}
             onChange={(e) => setInputPregunta(e.target.value)}
-            disabled={limiteAlcanzado}
+            disabled={limiteAlcanzado || !materiaId}
             placeholder={limiteAlcanzado ? 'Alcanzaste el límite diario de preguntas...' : 'Preguntale a tus apuntes...'}
             style={{
               flex: 1,
@@ -308,7 +357,7 @@ export default function PreguntarPage() {
           />
           <button
             type="submit"
-            disabled={limiteAlcanzado}
+            disabled={limiteAlcanzado || esperando || !materiaId}
             style={{
               backgroundColor: 'var(--accent-purple)',
               color: '#fff',
@@ -317,8 +366,8 @@ export default function PreguntarPage() {
               padding: '12px 18px',
               fontSize: '14px',
               fontWeight: '700',
-              opacity: limiteAlcanzado ? 0.4 : 1,
-              cursor: limiteAlcanzado ? 'not-allowed' : 'pointer',
+              opacity: limiteAlcanzado || esperando || !materiaId ? 0.4 : 1,
+              cursor: limiteAlcanzado || esperando || !materiaId ? 'not-allowed' : 'pointer',
             }}
           >
             Enviar
