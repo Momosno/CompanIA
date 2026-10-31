@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from app.schemas.documento import PreguntaCreate, PreguntaMateriaResponse
 from app.schemas.materia import MateriaCreate, MateriaResponse, MateriaUpdate, MateriaEditResponse
@@ -7,6 +7,7 @@ from app.services.materias import (
     crear_materia, listar_materias, buscar_materia, editar_materia,
     agregar_unidad, buscar_unidad, editar_unidad, eliminar_unidad, eliminar_materia, _is_mock,
 )
+from app.services.documentos import eliminar_documento, eliminar_vectores, listar_documentos
 from app.services.uso import preguntas_restantes, registrar_pregunta
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/materias", tags=["materias"])
@@ -105,7 +106,16 @@ def eliminar_unidad_endpoint(usuario_id: int, materia_id: int, unidad_id: int):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
 @router.delete("/{materia_id}", status_code=204)
-def eliminar_materia_endpoint(usuario_id: int, materia_id: int):
+def eliminar_materia_endpoint(usuario_id: int, materia_id: int, background_tasks: BackgroundTasks):
+    if buscar_materia(usuario_id, materia_id) is None:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+
+    # primero los documentos: la tabla no limpia sus PDF ni sus vectores
+    for documento in listar_documentos(usuario_id, materia_id):
+        documento_id = str(documento["id"])
+        eliminar_documento(usuario_id, documento_id)
+        background_tasks.add_task(eliminar_vectores, documento_id)
+
     eliminado = eliminar_materia(usuario_id, materia_id)
     if not eliminado:
         raise HTTPException(status_code=404, detail="Materia no encontrada")

@@ -2,6 +2,8 @@ from app.core.supabase_client import supabase, FakeSupabaseClient
 from postgrest.exceptions import APIError
 from datetime import datetime
 
+MATERIA_DUPLICADA = "Ya existe una materia con ese nombre en ese cuatrimestre."
+
 # Base de datos en memoria para cuando no se conecta a Supabase remoto
 _mock_db = {
     "usuarios": [
@@ -65,7 +67,7 @@ def crear_materia(usuario_id: int, nombre: str, cuatrimestre: str, unidades: lis
         }).execute()
     except APIError as e:
         if e.code == "23505":
-            raise ValueError("Ya existe una materia con ese nombre en ese cuatrimestre.")
+            raise ValueError(MATERIA_DUPLICADA)
         raise
 
     materia = response.data[0]
@@ -115,17 +117,30 @@ def editar_materia(usuario_id: int, materia_id: int, nuevo_nombre: str):
     if _is_mock():
         m = buscar_materia(usuario_id, materia_id)
         if m:
+            for otra in _mock_db["materias"]:
+                if (
+                    otra is not m
+                    and otra["usuario_id"] == usuario_id
+                    and otra["nombre"] == nuevo_nombre
+                    and otra["cuatrimestre"] == m["cuatrimestre"]
+                ):
+                    raise ValueError(MATERIA_DUPLICADA)
             m["nombre"] = nuevo_nombre
             return m
         return None
 
-    response = (
-        supabase.table("materias")
-        .update({"nombre": nuevo_nombre})
-        .eq("id", materia_id)
-        .eq("usuario_id", usuario_id)
-        .execute()
-    )
+    try:
+        response = (
+            supabase.table("materias")
+            .update({"nombre": nuevo_nombre})
+            .eq("id", materia_id)
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+    except APIError as e:
+        if e.code == "23505":
+            raise ValueError(MATERIA_DUPLICADA)
+        raise
     return response.data[0] if response.data else None
 
 def agregar_unidad(usuario_id: int, materia_id: int, numero_unidad: int, nombre_tema: str):
@@ -151,7 +166,7 @@ def agregar_unidad(usuario_id: int, materia_id: int, numero_unidad: int, nombre_
 
 def editar_unidad(usuario_id: int, materia_id: int, unidad_id: int, datos: dict):
     m = buscar_materia(usuario_id, materia_id)
-    if not m:
+    if not m or not any(u["id"] == unidad_id for u in m.get("unidades", [])):
         return None
     if _is_mock():
         for u in m.get("unidades", []):
@@ -170,7 +185,7 @@ def editar_unidad(usuario_id: int, materia_id: int, unidad_id: int, datos: dict)
 
 def eliminar_unidad(usuario_id: int, materia_id: int, unidad_id: int):
     m = buscar_materia(usuario_id, materia_id)
-    if not m:
+    if not m or not any(u["id"] == unidad_id for u in m.get("unidades", [])):
         return False
     if _is_mock():
         prev_len = len(m.get("unidades", []))

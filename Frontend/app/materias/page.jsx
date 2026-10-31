@@ -26,6 +26,10 @@ export default function MateriasPage() {
   const [errorCarga, setErrorCarga] = useState(null);
   const [formMateria, setFormMateria] = useState(null);
   const [errorFormMateria, setErrorFormMateria] = useState(null);
+  const [nombreEdicion, setNombreEdicion] = useState(null);
+  const [errorEdicion, setErrorEdicion] = useState(null);
+  const [temaUnidad, setTemaUnidad] = useState(null);
+  const [errorUnidad, setErrorUnidad] = useState(null);
   const [selectedMateriaId, setSelectedMateriaId] = useState(null);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState(null);
@@ -385,6 +389,8 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
                 setSelectedMateriaId(m.id);
                 setUnidadDestino(m.unidades[0]?.id || '');
                 setErrorValidacion(null);
+                setNombreEdicion(null);
+                setTemaUnidad(null);
               }}
               style={{
                 backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
@@ -499,6 +505,80 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
   const totalUnidades = materiaActiva.unidades.length;
   const totalApuntes = materiaActiva.unidades.reduce((acc, u) => acc + u.apuntes.length, 0);
 
+  const guardarNombreMateria = (e) => {
+    e.preventDefault();
+    setErrorEdicion(null);
+    const nombre = nombreEdicion.trim();
+
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaActiva.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre }),
+    })
+      .then(async (res) => {
+        const datos = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'No pudimos guardar el nombre.');
+      })
+      .then(() => {
+        setMaterias((prev) => prev.map((m) => (m.id === materiaActiva.id ? { ...m, nombre } : m)));
+        setNombreEdicion(null);
+      })
+      .catch((err) => {
+        console.warn('No se pudo editar la materia:', err);
+        setErrorEdicion(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
+      });
+  };
+
+  const crearUnidad = (e) => {
+    e.preventDefault();
+    setErrorUnidad(null);
+    const materiaId = materiaActiva.id;
+    const numero = Math.max(0, ...materiaActiva.unidades.map((u) => u.numero)) + 1;
+
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaId}/unidades`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numero_unidad: numero, nombre_tema: temaUnidad.trim() }),
+    })
+      .then(async (res) => {
+        const datos = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'No pudimos crear la unidad.');
+        return datos;
+      })
+      .then((unidad) => {
+        const nueva = { id: unidad.id, numero: unidad.numero_unidad, nombre: unidad.nombre_tema, apuntes: [] };
+        setMaterias((prev) => prev.map((m) => (
+          m.id === materiaId ? { ...m, unidades: [...m.unidades, nueva] } : m
+        )));
+        setUnidadDestino((actual) => actual || nueva.id);
+        setTemaUnidad(null);
+      })
+      .catch((err) => {
+        console.warn('No se pudo crear la unidad:', err);
+        setErrorUnidad(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
+      });
+  };
+
+  const eliminarMateria = () => {
+    const aviso = `¿Seguro que querés eliminar "${materiaActiva.nombre}"? Se borrarán sus unidades y ${totalApuntes} ${totalApuntes === 1 ? 'apunte' : 'apuntes'}.`;
+    if (!window.confirm(aviso)) return;
+
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaActiva.id}`, { method: 'DELETE' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Error al eliminar la materia');
+        const restantes = materias.filter((m) => m.id !== materiaActiva.id);
+        setMaterias(restantes);
+        setSelectedMateriaId(restantes[0]?.id ?? null);
+        setUnidadDestino(restantes[0]?.unidades[0]?.id || '');
+        setNombreEdicion(null);
+        setErrorValidacion(null);
+      })
+      .catch((err) => {
+        console.warn('No se pudo eliminar la materia:', err);
+        setErrorValidacion(`No pudimos eliminar "${materiaActiva.nombre}". Probá de nuevo.`);
+      });
+  };
+
   const apuntesConError = [];
   materias.forEach((m) => {
     m.unidades.forEach((u) => {
@@ -579,19 +659,26 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
         </div>
 
         <div className="subjects-actions" style={{ display: 'flex', gap: '10px' }}>
-          <button style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '8px',
-            padding: '7px 14px',
-            fontSize: '13px',
-            fontWeight: '500',
-            color: 'var(--text-primary)',
-            cursor: 'pointer'
-          }}>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorEdicion(null);
+              setNombreEdicion(materiaActiva.nombre);
+            }}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: 'var(--text-primary)',
+              cursor: 'pointer'
+            }}
+          >
             Editar materia
           </button>
-          <button style={{
+          <button type="button" onClick={eliminarMateria} style={{
             backgroundColor: '#FDE8E8',
             border: '1px solid #F8B4B4',
             borderRadius: '8px',
@@ -605,6 +692,55 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
           </button>
         </div>
       </div>
+
+      {nombreEdicion !== null && (
+        <form onSubmit={guardarNombreMateria} style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px'
+        }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            <input
+              value={nombreEdicion}
+              onChange={(e) => setNombreEdicion(e.target.value)}
+              aria-label="Nuevo nombre de la materia"
+              required
+              style={estiloCampo}
+            />
+            <button type="submit" style={{
+              backgroundColor: 'var(--accent-purple)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}>
+              Guardar
+            </button>
+            <button type="button" onClick={() => setNombreEdicion(null)} style={{
+              backgroundColor: 'transparent',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: 'var(--text-primary)',
+              cursor: 'pointer'
+            }}>
+              Cancelar
+            </button>
+          </div>
+          {errorEdicion && (
+            <p role="alert" style={{ fontSize: '13px', color: '#9B1C1C' }}>{errorEdicion}</p>
+          )}
+        </form>
+      )}
 
       {/* Disposición en dos columnas */}
       <div className="subjects-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
@@ -775,9 +911,41 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
             />
           </label>
 
-          <button style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 10px', fontWeight: '600', cursor: 'pointer' }}>
-            Crear unidad
-          </button>
+          {temaUnidad === null ? (
+            <button
+              type="button"
+              onClick={() => {
+                setErrorUnidad(null);
+                setTemaUnidad('');
+              }}
+              style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 10px', fontWeight: '600', cursor: 'pointer' }}
+            >
+              Crear unidad
+            </button>
+          ) : (
+            <form onSubmit={crearUnidad} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input
+                value={temaUnidad}
+                onChange={(e) => setTemaUnidad(e.target.value)}
+                placeholder="Tema de la unidad"
+                aria-label="Tema de la unidad"
+                autoFocus
+                required
+                style={{ ...estiloCampo, flex: 'none' }}
+              />
+              {errorUnidad && (
+                <p role="alert" style={{ fontSize: '13px', color: '#9B1C1C' }}>{errorUnidad}</p>
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" style={{ flex: 1, backgroundColor: 'var(--accent-purple)', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                  Crear
+                </button>
+                <button type="button" onClick={() => setTemaUnidad(null)} style={{ flex: 1, backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
 
           {apuntesConError.length > 0 && (
             <button
