@@ -48,6 +48,7 @@ COMPLEMENTO:
 SIN_MATERIAL = "Eso no aparece en el material que subiste."
 CITA = re.compile(r"\(p\.\s*([^)]*)\)")
 MARCA_COMPLEMENTO = re.compile(r"\*{0,2}COMPLEMENTO:\*{0,2}")
+RESERVA_MARCA = len("**COMPLEMENTO:**")
 
 
 class LLMNoDisponible(Exception):
@@ -69,18 +70,22 @@ def _paginas_citadas(texto):
     return {pagina for cita in CITA.findall(texto) for pagina in re.findall(r"\w+", cita)}
 
 
-def responder_materia(pregunta, materia_id):
+def _fragmentos_de_materia(pregunta, materia_id):
     resultados = vectorstore.similarity_search_with_score(
         pregunta, k=5, filter={"materia_id": int(materia_id)}
     )
-    relevantes = [doc for doc, score in resultados if score < UMBRAL]
-    if not relevantes:
-        return {"respuesta": SIN_MATERIAL, "fuentes": [], "sin_fuente": True}
-    contexto = "\n\n".join(
+    return [doc for doc, score in resultados if score < UMBRAL]
+
+
+def _contexto_de_materia(relevantes):
+    return "\n\n".join(
         f"[Página {doc.metadata['page_label']} - {doc.metadata['nombre_documento']}]\n{doc.page_content}"
         for doc in relevantes
     )
-    partes = MARCA_COMPLEMENTO.split(_preguntar_al_modelo(contexto, pregunta, PROMPT_MATERIA), maxsplit=1)
+
+
+def _armar_resultado(texto_modelo, relevantes):
+    partes = MARCA_COMPLEMENTO.split(texto_modelo, maxsplit=1)
     texto = partes[0].strip()
     complemento = partes[1].strip() if len(partes) > 1 else None
 
@@ -105,6 +110,51 @@ def responder_materia(pregunta, materia_id):
         ],
         "sin_fuente": False,
     }
+
+
+def responder_materia(pregunta, materia_id):
+    relevantes = _fragmentos_de_materia(pregunta, materia_id)
+    if not relevantes:
+        return {"respuesta": SIN_MATERIAL, "fuentes": [], "sin_fuente": True}
+    texto = _preguntar_al_modelo(_contexto_de_materia(relevantes), pregunta, PROMPT_MATERIA)
+    return _armar_resultado(texto, relevantes)
+
+
+def _fragmentos_del_modelo(contexto, pregunta, prompt):
+    try:
+        for fragmento in model.stream([
+            ("system", prompt),
+            ("human", f"Fragmentos:\n{contexto}\n\nPregunta: {pregunta}"),
+        ]):
+            if fragmento.text:
+                yield fragmento.text
+    except Exception as e:
+        raise LLMNoDisponible(str(e)) from e
+
+
+def responder_materia_stream(pregunta, materia_id):
+    """Genera ("token", texto) por cada parte de la respuesta y al final ("fin", resultado)."""
+    relevantes = _fragmentos_de_materia(pregunta, materia_id)
+    if not relevantes:
+        yield "fin", {"respuesta": SIN_MATERIAL, "fuentes": [], "sin_fuente": True}
+        return
+
+    completo = ""
+    enviado = 0
+    for fragmento in _fragmentos_del_modelo(_contexto_de_materia(relevantes), pregunta, PROMPT_MATERIA):
+        completo += fragmento
+        marca = MARCA_COMPLEMENTO.search(completo)
+        # se retiene el final porque la marca del complemento puede estar llegando cortada
+        hasta = marca.start() if marca else len(completo) - RESERVA_MARCA
+        if hasta > enviado:
+            yield "token", completo[enviado:hasta]
+            enviado = hasta
+
+    marca = MARCA_COMPLEMENTO.search(completo)
+    hasta = marca.start() if marca else len(completo)
+    if hasta > enviado:
+        yield "token", completo[enviado:hasta]
+    yield "fin", _armar_resultado(completo, relevantes)
 
 
 def responder(pregunta, documento_id):

@@ -32,6 +32,9 @@ export default function MateriasPage() {
   const [temaUnidad, setTemaUnidad] = useState(null);
   const [errorUnidad, setErrorUnidad] = useState(null);
   const [confirmacion, setConfirmacion] = useState(null);
+  const [creando, setCreando] = useState(false);
+  // el estado tarda un render en actualizarse: el ref frena también un doble clic inmediato
+  const creandoRef = useRef(false);
   const [edicionUnidad, setEdicionUnidad] = useState(null);
   const [errorEdicionUnidad, setErrorEdicionUnidad] = useState(null);
   const [selectedMateriaId, setSelectedMateriaId] = useState(null);
@@ -337,8 +340,21 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
     }, 150);
   };
 
+  const empezarCreacion = () => {
+    if (creandoRef.current) return false;
+    creandoRef.current = true;
+    setCreando(true);
+    return true;
+  };
+
+  const terminarCreacion = () => {
+    creandoRef.current = false;
+    setCreando(false);
+  };
+
   const crearMateria = (e) => {
     e.preventDefault();
+    if (!empezarCreacion()) return;
     setErrorFormMateria(null);
 
     fetch(`${API_URL}/usuarios/${usuario.id}/materias/`, {
@@ -376,7 +392,8 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
       .catch((err) => {
         console.warn('No se pudo crear la materia:', err);
         setErrorFormMateria(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
-      });
+      })
+      .finally(terminarCreacion);
   };
 
   const estiloCampo = {
@@ -487,7 +504,7 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
             <p role="alert" style={{ fontSize: '13px', color: '#9B1C1C' }}>{errorFormMateria}</p>
           )}
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="submit" style={{
+            <button type="submit" disabled={creando} style={{
               backgroundColor: 'var(--accent-purple)',
               color: '#fff',
               border: 'none',
@@ -495,9 +512,10 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
               padding: '7px 14px',
               fontSize: '13px',
               fontWeight: '600',
-              cursor: 'pointer'
+              opacity: creando ? 0.6 : 1,
+              cursor: creando ? 'not-allowed' : 'pointer'
             }}>
-              Crear materia
+              {creando ? 'Creando...' : 'Crear materia'}
             </button>
             <button type="button" onClick={() => setFormMateria(null)} style={{
               backgroundColor: 'transparent',
@@ -565,6 +583,7 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
 
   const crearUnidad = (e) => {
     e.preventDefault();
+    if (!empezarCreacion()) return;
     setErrorUnidad(null);
     const materiaId = materiaActiva.id;
     const numero = Math.max(0, ...materiaActiva.unidades.map((u) => u.numero)) + 1;
@@ -590,7 +609,8 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
       .catch((err) => {
         console.warn('No se pudo crear la unidad:', err);
         setErrorUnidad(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
-      });
+      })
+      .finally(terminarCreacion);
   };
 
   const guardarUnidad = (e) => {
@@ -1073,8 +1093,8 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
                 <p role="alert" style={{ fontSize: '13px', color: '#9B1C1C' }}>{errorUnidad}</p>
               )}
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="submit" style={{ flex: 1, backgroundColor: 'var(--accent-purple)', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                  Crear
+                <button type="submit" disabled={creando} style={{ flex: 1, backgroundColor: 'var(--accent-purple)', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontWeight: '600', opacity: creando ? 0.6 : 1, cursor: creando ? 'not-allowed' : 'pointer' }}>
+                  {creando ? 'Creando...' : 'Crear'}
                 </button>
                 <button type="button" onClick={() => setTemaUnidad(null)} style={{ flex: 1, backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '7px 10px', fontSize: '13px', fontWeight: '500', color: 'var(--text-primary)', cursor: 'pointer' }}>
                   Cancelar

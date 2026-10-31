@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble';
 import DialogoConfirmacion from '../DialogoConfirmacion';
-import { API_URL, getUsuarioActual } from '../lib/api';
+import { API_URL, getUsuarioActual, leerEventos } from '../lib/api';
 
 const CLAVE_HISTORIAL = 'compania_chat_por_materia';
 const ERROR_CHAT = 'No pudimos responder tu pregunta. Probá de nuevo en unos minutos.';
@@ -156,30 +156,61 @@ export default function PreguntarPage() {
     };
 
     try {
-      const res = await fetch(`${API_URL}/usuarios/${usuario.id}/materias/${idMateria}/preguntas`, {
+      const res = await fetch(`${API_URL}/usuarios/${usuario.id}/materias/${idMateria}/preguntas/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pregunta }),
       });
-      const datos = await res.json().catch(() => ({}));
 
-      if (typeof datos.restantes === 'number') setPreguntasRestantes(datos.restantes);
+      if (!res.ok) {
+        const datos = await res.json().catch(() => ({}));
+        if (typeof datos.restantes === 'number') setPreguntasRestantes(datos.restantes);
 
-      if (res.status === 429) {
-        setPreguntasRestantes(0);
-        reemplazarPendiente(null);
-      } else if (!res.ok) {
-        reemplazarPendiente({
-          texto: typeof datos.detail === 'string' ? datos.detail : ERROR_CHAT,
-        });
-      } else {
-        reemplazarPendiente({
-          texto: datos.respuesta,
-          fuentes: datos.fuentes,
-          sinFuente: datos.sin_fuente,
-          complemento: datos.complemento,
-        });
+        if (res.status === 429) {
+          setPreguntasRestantes(0);
+          reemplazarPendiente(null);
+        } else {
+          reemplazarPendiente({
+            texto: typeof datos.detail === 'string' ? datos.detail : ERROR_CHAT,
+          });
+        }
+        return;
       }
+
+      let textoRecibido = '';
+      let terminado = false;
+
+      await leerEventos(res, (evento, datos) => {
+        if (evento === 'token') {
+          textoRecibido += datos.texto;
+          const estabaAbajo = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 150;
+          setConversaciones((prev) => ({
+            ...prev,
+            [idMateria]: (prev[idMateria] || []).map((m) => (
+              m.id === idPendiente ? { ...m, texto: textoRecibido } : m
+            )),
+          }));
+          if (estabaAbajo) {
+            requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          }
+          return;
+        }
+
+        terminado = true;
+        if (typeof datos.restantes === 'number') setPreguntasRestantes(datos.restantes);
+        if (evento === 'done') {
+          reemplazarPendiente({
+            texto: datos.respuesta,
+            fuentes: datos.fuentes,
+            sinFuente: datos.sin_fuente,
+            complemento: datos.complemento,
+          });
+        } else {
+          reemplazarPendiente({ texto: typeof datos.detail === 'string' ? datos.detail : ERROR_CHAT });
+        }
+      });
+
+      if (!terminado) reemplazarPendiente({ texto: ERROR_CHAT });
     } catch (err) {
       console.warn('No se pudo enviar la pregunta:', err);
       reemplazarPendiente({ texto: ERROR_CHAT });

@@ -26,3 +26,26 @@ export function setUsuarioActual({ id, nombre }) {
     console.warn('No se pudo guardar el usuario actual:', err);
   }
 }
+
+// Lee una respuesta text/event-stream y llama a alRecibir(evento, datos) por cada evento
+export async function leerEventos(respuesta, alRecibir) {
+  const lector = respuesta.body.getReader();
+  const decodificador = new TextDecoder();
+  let pendiente = '';
+
+  while (true) {
+    const { done, value } = await lector.read();
+    if (done) return;
+
+    pendiente += decodificador.decode(value, { stream: true });
+    const bloques = pendiente.split('\n\n');
+    pendiente = bloques.pop();
+
+    for (const bloque of bloques) {
+      const lineas = bloque.split('\n');
+      const evento = lineas.find((l) => l.startsWith('event: '))?.slice(7);
+      const datos = lineas.find((l) => l.startsWith('data: '))?.slice(6);
+      if (evento && datos) alRecibir(evento, JSON.parse(datos));
+    }
+  }
+}
