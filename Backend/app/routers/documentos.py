@@ -8,7 +8,7 @@ from app.schemas.documento import (
 from app.services.materias import buscar_materia, buscar_unidad
 from app.services.documentos import (
     crear_documento, listar_documentos, buscar_documento, eliminar_documento, eliminar_vectores,
-    procesar_documento, _is_mock,
+    preparar_reintento, procesar_documento, _is_mock,
 )
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/documentos", tags=["documentos"])
@@ -49,6 +49,15 @@ def obtener(usuario_id: int, documento_id: UUID):
     if resultado is None:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     return resultado
+
+@router.post("/{documento_id}/reintentar", response_model=DocumentoSubidoResponse, status_code=202)
+def reintentar(usuario_id: int, documento_id: UUID, background_tasks: BackgroundTasks):
+    if buscar_documento(usuario_id, str(documento_id)) is None:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    if not preparar_reintento(usuario_id, str(documento_id)):
+        raise HTTPException(status_code=409, detail="El documento no está en error")
+    background_tasks.add_task(procesar_documento, str(documento_id))
+    return {"id": documento_id, "estado": "pending"}
 
 @router.post("/{documento_id}/preguntas", response_model=PreguntaResponse)
 def preguntar(usuario_id: int, documento_id: UUID, pregunta: PreguntaCreate):

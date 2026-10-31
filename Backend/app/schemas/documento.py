@@ -19,6 +19,7 @@ class DocumentoListaResponse(BaseModel):
     nombre_original: str
     estado: str
     paginas: int | None = None
+    error: str | None = None
     created_at: datetime
 
 # lo que se devuelve al consultar un documento (incluye el resumen cuando está listo)

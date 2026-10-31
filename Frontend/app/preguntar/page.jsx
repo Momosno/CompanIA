@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble';
+import DialogoConfirmacion from '../DialogoConfirmacion';
 import { API_URL, getUsuarioActual } from '../lib/api';
 
 const CLAVE_HISTORIAL = 'compania_chat_por_materia';
@@ -14,6 +15,7 @@ export default function PreguntarPage() {
   const [preguntasRestantes, setPreguntasRestantes] = useState(null);
   const [inputPregunta, setInputPregunta] = useState('');
   const [esperando, setEsperando] = useState(false);
+  const [confirmacion, setConfirmacion] = useState(null);
   const preguntaEnCurso = useRef(false);
 
   // Al enviar y al recibir la respuesta baja hasta el final; en el resto de los casos no mueve la lectura
@@ -168,19 +170,26 @@ export default function PreguntarPage() {
     }
   };
 
-  const handleNuevaConsulta = () => {
-    if (mensajes.length > 0) {
-      const confirmar = window.confirm(
-        `¿Querés iniciar una nueva consulta en ${nombreMateria}? Se limpiará la conversación actual de esta materia.`
-      );
-      if (!confirmar) return;
-    }
-
+  const limpiarConsulta = () => {
     setSessionId(Date.now().toString());
     setConversaciones((prev) => ({
       ...prev,
       [materiaId]: [],
     }));
+  };
+
+  const handleNuevaConsulta = () => {
+    if (mensajes.length === 0) {
+      limpiarConsulta();
+      return;
+    }
+
+    setConfirmacion({
+      titulo: 'Nueva consulta',
+      mensaje: `¿Querés iniciar una nueva consulta en ${nombreMateria}? Se limpiará la conversación actual de esta materia.`,
+      textoConfirmar: 'Iniciar nueva consulta',
+      accion: limpiarConsulta,
+    });
   };
 
   return (
@@ -374,6 +383,8 @@ export default function PreguntarPage() {
           </button>
         </form>
       </div>
+
+      <DialogoConfirmacion confirmacion={confirmacion} onCerrar={() => setConfirmacion(null)} />
     </div>
   );
 }

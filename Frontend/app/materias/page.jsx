@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import DialogoConfirmacion from '../DialogoConfirmacion';
 import { API_URL, getUsuarioActual } from '../lib/api';
 
 const MAX_FILE_SIZE_MB = 25;
@@ -30,6 +31,7 @@ export default function MateriasPage() {
   const [errorEdicion, setErrorEdicion] = useState(null);
   const [temaUnidad, setTemaUnidad] = useState(null);
   const [errorUnidad, setErrorUnidad] = useState(null);
+  const [confirmacion, setConfirmacion] = useState(null);
   const [selectedMateriaId, setSelectedMateriaId] = useState(null);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState(null);
@@ -62,7 +64,8 @@ export default function MateriasPage() {
                 id: doc.id,
                 nombre: doc.nombre_original,
                 paginas: doc.paginas || 1,
-                estado: estadoDeDocumento(doc)
+                estado: estadoDeDocumento(doc),
+                errorDetalle: doc.error
               }))
           }))
         }));
@@ -104,7 +107,7 @@ export default function MateriasPage() {
               apuntes: unidad.apuntes.map((apunte) => {
                 const doc = documentos.find((d) => d.id === apunte.id);
                 if (!doc) return apunte;
-                return { ...apunte, paginas: doc.paginas || apunte.paginas, estado: estadoDeDocumento(doc) };
+                return { ...apunte, paginas: doc.paginas || apunte.paginas, estado: estadoDeDocumento(doc), errorDetalle: doc.error };
               }),
             })),
           })));
@@ -178,58 +181,86 @@ export default function MateriasPage() {
     )));
   };
 
+  const urlDocumento = (documentoId) => `${API_URL}/usuarios/${usuario.id}/documentos/${documentoId}`;
+
   const reintentarProcesamiento = (archivo) => {
-    actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
-      ...apunte,
-      estado: 'procesando',
-      errorCode: undefined,
-      errorDetalle: undefined,
-    }));
     setMostrarErrores(false);
+
+    fetch(`${urlDocumento(archivo.apunteId)}/reintentar`, { method: 'POST' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Error al reintentar');
+        actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
+          ...apunte,
+          estado: 'procesando',
+          errorDetalle: undefined,
+        }));
+      })
+      .catch((err) => {
+        console.warn('No se pudo reintentar el procesamiento:', err);
+        setErrorValidacion(`No pudimos reintentar "${archivo.archivo}". Probá de nuevo.`);
+      });
   };
 
-  const reemplazarArchivo = (archivo, nuevoArchivo) => {
+  const reemplazarArchivo = async (archivo, nuevoArchivo) => {
     const validacion = validarArchivoPDF(nuevoArchivo);
     if (!validacion.valido) {
       setErrorValidacion(validacion.error);
+      setMostrarErrores(false);
       return;
     }
 
     setErrorValidacion(null);
-    actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
-      ...apunte,
-      nombre: nuevoArchivo.name,
-      estado: 'procesando',
-      errorCode: undefined,
-      errorDetalle: undefined,
-    }));
     setMostrarErrores(false);
+
+    const formData = new FormData();
+    formData.append('materia_id', archivo.materiaId);
+    formData.append('unidad_id', archivo.unidadId);
+    formData.append('archivo', nuevoArchivo);
+
+    // Primero se sube el nuevo: si falla, el anterior sigue en su lugar
+    try {
+      const res = await fetch(`${API_URL}/usuarios/${usuario.id}/documentos/`, { method: 'POST', body: formData });
+      const datos = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'Error al subir el archivo');
+
+      actualizarApunte(archivo.materiaId, archivo.unidadId, archivo.apunteId, (apunte) => ({
+        ...apunte,
+        id: datos.id,
+        nombre: nuevoArchivo.name,
+        paginas: 1,
+        estado: 'procesando',
+        errorDetalle: undefined,
+      }));
+
+      const borrado = await fetch(urlDocumento(archivo.apunteId), { method: 'DELETE' });
+      if (!borrado.ok) throw new Error('Error al borrar el anterior');
+    } catch (err) {
+      console.warn('No se pudo reemplazar el archivo:', err);
+      const motivo = err instanceof TypeError ? 'no hay conexión con el backend' : err.message;
+      setErrorValidacion(`No pudimos reemplazar "${archivo.archivo}": ${motivo}.`);
+    }
   };
 
   const eliminarApunte = (unidadId, apunteId) => {
-    if (!window.confirm('¿Seguro que querés eliminar este apunte?')) return;
+    const apunte = materiaActiva.unidades.find((u) => u.id === unidadId)?.apuntes.find((a) => a.id === apunteId);
 
-    setMaterias((prev) =>
-      prev.map((materia) => {
-        if (materia.id !== selectedMateriaId) return materia;
-        return {
-          ...materia,
-          unidades: materia.unidades.map((u) => {
-            if (u.id !== unidadId) return u;
-            return {
-              ...u,
-              apuntes: u.apuntes.filter((a) => a.id !== apunteId),
-            };
-          }),
-        };
-      })
-    );
-
-    // Petición al backend si está conectado
-    fetch(`${API_URL}/usuarios/${usuario.id}/documentos/${apunteId}`, {
-      method: 'DELETE',
-    }).catch((err) => {
-      console.warn('Backend desconectado. Apunte eliminado solo en el cliente local:', err);
+    setConfirmacion({
+      titulo: 'Eliminar apunte',
+      mensaje: `¿Seguro que querés eliminar "${apunte?.nombre}"? Esta acción no se puede deshacer.`,
+      textoConfirmar: 'Eliminar apunte',
+      peligro: true,
+      accion: () => {
+        fetch(urlDocumento(apunteId), { method: 'DELETE' })
+          .then((res) => {
+            // 404: ya no existe, así que también se quita de la pantalla
+            if (!res.ok && res.status !== 404) throw new Error('Error al eliminar el apunte');
+            quitarApunte(selectedMateriaId, unidadId, apunteId);
+          })
+          .catch((err) => {
+            console.warn('No se pudo eliminar el apunte:', err);
+            setErrorValidacion(`No pudimos eliminar "${apunte?.nombre}". Probá de nuevo.`);
+          });
+      },
     });
   };
 
@@ -560,23 +591,28 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
   };
 
   const eliminarMateria = () => {
-    const aviso = `¿Seguro que querés eliminar "${materiaActiva.nombre}"? Se borrarán sus unidades y ${totalApuntes} ${totalApuntes === 1 ? 'apunte' : 'apuntes'}.`;
-    if (!window.confirm(aviso)) return;
-
-    fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaActiva.id}`, { method: 'DELETE' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Error al eliminar la materia');
-        const restantes = materias.filter((m) => m.id !== materiaActiva.id);
-        setMaterias(restantes);
-        setSelectedMateriaId(restantes[0]?.id ?? null);
-        setUnidadDestino(restantes[0]?.unidades[0]?.id || '');
-        setNombreEdicion(null);
-        setErrorValidacion(null);
-      })
-      .catch((err) => {
-        console.warn('No se pudo eliminar la materia:', err);
-        setErrorValidacion(`No pudimos eliminar "${materiaActiva.nombre}". Probá de nuevo.`);
-      });
+    setConfirmacion({
+      titulo: 'Eliminar materia',
+      mensaje: `¿Seguro que querés eliminar "${materiaActiva.nombre}"? Se borrarán sus unidades y ${totalApuntes} ${totalApuntes === 1 ? 'apunte' : 'apuntes'}. Esta acción no se puede deshacer.`,
+      textoConfirmar: 'Eliminar materia',
+      peligro: true,
+      accion: () => {
+        fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaActiva.id}`, { method: 'DELETE' })
+          .then((res) => {
+            if (!res.ok) throw new Error('Error al eliminar la materia');
+            const restantes = materias.filter((m) => m.id !== materiaActiva.id);
+            setMaterias(restantes);
+            setSelectedMateriaId(restantes[0]?.id ?? null);
+            setUnidadDestino(restantes[0]?.unidades[0]?.id || '');
+            setNombreEdicion(null);
+            setErrorValidacion(null);
+          })
+          .catch((err) => {
+            console.warn('No se pudo eliminar la materia:', err);
+            setErrorValidacion(`No pudimos eliminar "${materiaActiva.nombre}". Probá de nuevo.`);
+          });
+      },
+    });
   };
 
   const apuntesConError = [];
@@ -953,8 +989,9 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
               onClick={() => setMostrarErrores(true)}
               aria-haspopup="dialog"
               aria-expanded={mostrarErrores}
-              className="w-full rounded-lg border border-[#F8B4B4] bg-[#FDE8E8] p-3 text-left text-sm font-semibold text-[#9B1C1C] transition-colors hover:bg-[#fbdede] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9B1C1C]"
+              className="w-full rounded-lg border border-[#F8B4B4] bg-[#FDE8E8] text-center text-sm font-semibold text-[#9B1C1C] transition-colors hover:bg-[#fbdede] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9B1C1C]"
             >
+              
               Hay {apuntesConError.length} archivo(s) con error de lectura. Ver detalles
             </button>
           )}
@@ -1024,6 +1061,8 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
           ))}
         </div>
       </dialog>
+
+      <DialogoConfirmacion confirmacion={confirmacion} onCerrar={() => setConfirmacion(null)} />
     </div>
   );
 }

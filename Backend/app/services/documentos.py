@@ -10,13 +10,19 @@ logger = logging.getLogger(__name__)
 
 BUCKET = "Documents"
 
-COLUMNAS_LISTA = "id, materia_id, unidad_id, nombre_original, estado, paginas, created_at"
+COLUMNAS_LISTA = "id, materia_id, unidad_id, nombre_original, estado, paginas, error, created_at"
 COLUMNAS_DETALLE = (
     "id, materia_id, unidad_id, nombre_original, tamano_bytes, estado, paginas, resumen, error, created_at"
 )
 
+ERROR_GENERICO = "No pudimos procesar el archivo. Probá de nuevo en unos minutos."
+
 # Mock en memoria para cuando no se conecta a Supabase Storage
 _mock_documentos = []
+
+# problema del propio PDF: el mensaje se le puede mostrar al usuario tal cual
+class DocumentoIlegible(Exception):
+    pass
 
 def _is_mock():
     return isinstance(supabase, FakeSupabaseClient)
@@ -95,6 +101,25 @@ def buscar_documento(usuario_id: int, documento_id: str):
     )
     return response.data[0] if response.data else None
 
+# devuelve False si el documento no está en error (por ejemplo, un reintento repetido)
+def preparar_reintento(usuario_id: int, documento_id: str):
+    if _is_mock():
+        documento = buscar_documento(usuario_id, documento_id)
+        if documento["estado"] != "error":
+            return False
+        documento.update({"estado": "pending", "error": None})
+        return True
+
+    response = (
+        supabase.table("documentos")
+        .update({"estado": "pending", "error": None})
+        .eq("id", documento_id)
+        .eq("usuario_id", usuario_id)
+        .eq("estado", "error")
+        .execute()
+    )
+    return len(response.data) > 0
+
 def eliminar_documento(usuario_id: int, documento_id: str):
     if _is_mock():
         prev_len = len(_mock_documentos)
@@ -163,7 +188,7 @@ def procesar_documento(documento_id: str):
             docs = cargar_pdf(ruta)
 
         if not any(doc.page_content.strip() for doc in docs):
-            raise ValueError("El PDF no tiene texto que se pueda leer (¿es un escaneo?)")
+            raise DocumentoIlegible("El PDF no tiene texto que se pueda leer (¿es un escaneo?)")
 
         from app.ia.pdf_index import indexar_documento
         from app.ia.Resuming_Agent import resumir_documento
@@ -174,5 +199,8 @@ def procesar_documento(documento_id: str):
         tabla.update(
             {"estado": "ready", "paginas": len(docs), "resumen": resumen, "error": None}
         ).eq("id", documento_id).execute()
-    except Exception as e:
-        tabla.update({"estado": "error", "error": str(e)[:500]}).eq("id", documento_id).execute()
+    except DocumentoIlegible as e:
+        tabla.update({"estado": "error", "error": str(e)}).eq("id", documento_id).execute()
+    except Exception:
+        logger.exception("No se pudo procesar el documento %s", documento_id)
+        tabla.update({"estado": "error", "error": ERROR_GENERICO}).eq("id", documento_id).execute()
