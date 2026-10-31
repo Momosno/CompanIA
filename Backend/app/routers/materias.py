@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+from app.schemas.documento import PreguntaCreate, PreguntaMateriaResponse
 from app.schemas.materia import MateriaCreate, MateriaResponse, MateriaUpdate, MateriaEditResponse
 from app.schemas.unidad import UnidadCreate, UnidadResponse, UnidadUpdate
 from app.services.materias import (
     crear_materia, listar_materias, buscar_materia, editar_materia,
-    agregar_unidad, buscar_unidad, editar_unidad, eliminar_unidad, eliminar_materia,
+    agregar_unidad, buscar_unidad, editar_unidad, eliminar_unidad, eliminar_materia, _is_mock,
 )
+from app.services.uso import preguntas_restantes, registrar_pregunta
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/materias", tags=["materias"])
 
@@ -45,6 +48,40 @@ def editar(usuario_id: int, materia_id: int, materia: MateriaUpdate):
         raise HTTPException(status_code=404, detail="Materia no encontrada")
 
     return resultado
+
+@router.post("/{materia_id}/preguntas", response_model=PreguntaMateriaResponse)
+def preguntar(usuario_id: int, materia_id: int, pregunta: PreguntaCreate):
+    if buscar_materia(usuario_id, materia_id) is None:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+
+    restantes = preguntas_restantes(usuario_id)
+    if restantes <= 0:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Alcanzaste el límite de preguntas por hoy.", "restantes": 0},
+        )
+
+    if _is_mock():
+        resultado = {
+            "respuesta": "Modo mock: sin IA no se puede responder sobre el material.",
+            "fuentes": [],
+            "sin_fuente": True,
+        }
+    else:
+        from app.ia.pdf_questions import LLMNoDisponible, responder_materia
+        try:
+            resultado = responder_materia(pregunta.pregunta, materia_id)
+        except LLMNoDisponible:
+            # una pregunta que falló no gasta cupo
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "El servicio de IA no está disponible. Probá de nuevo en unos minutos.",
+                    "restantes": restantes,
+                },
+            )
+
+    return {**resultado, "restantes": registrar_pregunta(usuario_id)}
 
 @router.post("/{materia_id}/unidades", response_model=UnidadResponse)
 def agregar_unidad_endpoint(usuario_id: int, materia_id: int, unidad: UnidadCreate):

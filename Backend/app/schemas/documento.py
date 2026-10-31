@@ -37,3 +37,14 @@ class DocumentoResponse(BaseModel):
 class PreguntaResponse(BaseModel):
     respuesta: str
     paginas: list[int]
+
+class FuenteResponse(BaseModel):
+    documento: str
+    pagina: int | str  # str para páginas numeradas con romanos
+
+# lo que se devuelve al preguntar sobre una materia
+class PreguntaMateriaResponse(BaseModel):
+    respuesta: str
+    fuentes: list[FuenteResponse]
+    sin_fuente: bool
+    restantes: int

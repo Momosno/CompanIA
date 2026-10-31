@@ -58,13 +58,12 @@ def preguntar(usuario_id: int, documento_id: UUID, pregunta: PreguntaCreate):
     if documento["estado"] != "ready":
         raise HTTPException(status_code=409, detail="El documento todavía no está listo")
     if _is_mock():
-        # Mock respuesta local
-        return {
-            "respuesta": f"Respuesta generada para: '{pregunta.pregunta}' sobre el documento '{documento.get('nombre_original', 'PDF')}'.",
-            "paginas": [],
-        }
-    from app.ia.pdf_questions import responder
-    return responder(pregunta.pregunta, str(documento_id))
+        return {"respuesta": "Modo mock: sin IA no se puede responder sobre el documento.", "paginas": []}
+    from app.ia.pdf_questions import LLMNoDisponible, responder
+    try:
+        return responder(pregunta.pregunta, str(documento_id))
+    except LLMNoDisponible:
+        raise HTTPException(status_code=503, detail="El servicio de IA no está disponible. Probá de nuevo en unos minutos.")
 
 @router.delete("/{documento_id}", status_code=204)
 def eliminar(usuario_id: int, documento_id: UUID, background_tasks: BackgroundTasks):

@@ -1,3 +1,4 @@
+import re
 import dotenv
 from langchain_anthropic import ChatAnthropic
 from app.ia.vectorstore import vectorstore
@@ -21,6 +22,62 @@ REGLAS:
 - No agregues ideas extra salvo que la pregunta los pida.
 - Sin títulos. Citá las páginas al final de cada afirmación, así: (p. 3).
 """
+SIN_MATERIAL = "Eso no aparece en el material que subiste."
+CITA = re.compile(r"\(p\.\s*([^)]*)\)")
+
+
+class LLMNoDisponible(Exception):
+    pass
+
+
+def _preguntar_al_modelo(contexto, pregunta):
+    try:
+        respuesta = model.invoke([
+            ("system", PROMPT),
+            ("human", f"Fragmentos:\n{contexto}\n\nPregunta: {pregunta}"),
+        ])
+    except Exception as e:
+        raise LLMNoDisponible(str(e)) from e
+    return respuesta.text
+
+
+def _paginas_citadas(texto):
+    return {pagina for cita in CITA.findall(texto) for pagina in re.findall(r"\w+", cita)}
+
+
+def responder_materia(pregunta, materia_id):
+    resultados = vectorstore.similarity_search_with_score(
+        pregunta, k=5, filter={"materia_id": int(materia_id)}
+    )
+    relevantes = [doc for doc, score in resultados if score < UMBRAL]
+    if not relevantes:
+        return {"respuesta": SIN_MATERIAL, "fuentes": [], "sin_fuente": True}
+    contexto = "\n\n".join(
+        f"[Página {doc.metadata['page_label']} - {doc.metadata['nombre_documento']}]\n{doc.page_content}"
+        for doc in relevantes
+    )
+    texto = _preguntar_al_modelo(contexto, pregunta)
+
+    # solo cuentan como fuentes las páginas que el modelo citó, no todo lo recuperado
+    citadas = _paginas_citadas(texto)
+    fuentes = sorted({
+        (doc.metadata["nombre_documento"], doc.metadata["page_label"])
+        for doc in relevantes if doc.metadata["page_label"] in citadas
+    })
+    if "no aparece en el material" in texto.lower():
+        return {"respuesta": texto, "fuentes": [], "sin_fuente": True}
+    if not fuentes:
+        return {"respuesta": SIN_MATERIAL, "fuentes": [], "sin_fuente": True}
+    return {
+        "respuesta": texto,
+        "fuentes": [
+            {"documento": documento, "pagina": int(pagina) if pagina.isdigit() else pagina}
+            for documento, pagina in fuentes
+        ],
+        "sin_fuente": False,
+    }
+
+
 def responder(pregunta, documento_id):
     resultados = vectorstore.similarity_search_with_score(
         pregunta, k=5, filter={"documento_id": documento_id}
@@ -31,12 +88,9 @@ def responder(pregunta, documento_id):
     contexto = "\n\n".join(
     f"[Página {doc.metadata['page_label']}]\n{doc.page_content}" for doc in relevantes
     )
-    respuesta = model.invoke([
-        ("system", PROMPT),
-        ("human", f"Fragmentos:\n{contexto}\n\nPregunta: {pregunta}"),
-    ])
+    texto = _preguntar_al_modelo(contexto, pregunta)
     paginas = sorted({int(doc.metadata["page_label"]) for doc in relevantes})
-    return {"respuesta": respuesta.text, "paginas": paginas}
+    return {"respuesta": texto, "paginas": paginas}
 
 if __name__ == "__main__":
     pregunta = "¿Qué es una función?"
