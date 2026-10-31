@@ -32,6 +32,8 @@ export default function MateriasPage() {
   const [temaUnidad, setTemaUnidad] = useState(null);
   const [errorUnidad, setErrorUnidad] = useState(null);
   const [confirmacion, setConfirmacion] = useState(null);
+  const [edicionUnidad, setEdicionUnidad] = useState(null);
+  const [errorEdicionUnidad, setErrorEdicionUnidad] = useState(null);
   const [selectedMateriaId, setSelectedMateriaId] = useState(null);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [errorValidacion, setErrorValidacion] = useState(null);
@@ -422,6 +424,7 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
                 setErrorValidacion(null);
                 setNombreEdicion(null);
                 setTemaUnidad(null);
+                setEdicionUnidad(null);
               }}
               style={{
                 backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
@@ -588,6 +591,58 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
         console.warn('No se pudo crear la unidad:', err);
         setErrorUnidad(err instanceof TypeError ? 'No hay conexión con el backend.' : err.message);
       });
+  };
+
+  const guardarUnidad = (e) => {
+    e.preventDefault();
+    setErrorEdicionUnidad(null);
+    const materiaId = materiaActiva.id;
+    const { id, tema } = edicionUnidad;
+
+    fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaId}/unidades/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre_tema: tema.trim() }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Error al editar la unidad');
+        setMaterias((prev) => prev.map((m) => (m.id !== materiaId ? m : {
+          ...m,
+          unidades: m.unidades.map((u) => (u.id === id ? { ...u, nombre: tema.trim() } : u)),
+        })));
+        setEdicionUnidad(null);
+      })
+      .catch((err) => {
+        console.warn('No se pudo editar la unidad:', err);
+        setErrorEdicionUnidad('No pudimos guardar la unidad. Probá de nuevo.');
+      });
+  };
+
+  const eliminarUnidad = (unidad) => {
+    const materiaId = materiaActiva.id;
+    const cantidad = unidad.apuntes.length;
+
+    setConfirmacion({
+      titulo: 'Eliminar unidad',
+      mensaje: `¿Seguro que querés eliminar "Unidad ${unidad.numero}: ${unidad.nombre}"? Se borrarán ${cantidad} ${cantidad === 1 ? 'apunte' : 'apuntes'}. Esta acción no se puede deshacer.`,
+      textoConfirmar: 'Eliminar unidad',
+      peligro: true,
+      accion: () => {
+        fetch(`${API_URL}/usuarios/${usuario.id}/materias/${materiaId}/unidades/${unidad.id}`, { method: 'DELETE' })
+          .then((res) => {
+            if (!res.ok) throw new Error('Error al eliminar la unidad');
+            const restantes = materiaActiva.unidades.filter((u) => u.id !== unidad.id);
+            setMaterias((prev) => prev.map((m) => (
+              m.id === materiaId ? { ...m, unidades: m.unidades.filter((u) => u.id !== unidad.id) } : m
+            )));
+            setUnidadDestino((actual) => (actual === unidad.id ? restantes[0]?.id || '' : actual));
+          })
+          .catch((err) => {
+            console.warn('No se pudo eliminar la unidad:', err);
+            setErrorValidacion(`No pudimos eliminar "Unidad ${unidad.numero}: ${unidad.nombre}". Probá de nuevo.`);
+          });
+      },
+    });
   };
 
   const eliminarMateria = () => {
@@ -806,9 +861,54 @@ const agregarApunteAUnidad = (unidadId, archivo) => {
                 gap: '12px'
               }}>
                 <div className="subject-unit-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                    Unidad {unidad.numero}: {unidad.nombre}
-                  </h3>
+                  {edicionUnidad?.id === unidad.id ? (
+                    <form onSubmit={guardarUnidad} style={{ flex: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>Unidad {unidad.numero}:</span>
+                      <input
+                        value={edicionUnidad.tema}
+                        onChange={(e) => setEdicionUnidad((prev) => ({ ...prev, tema: e.target.value }))}
+                        aria-label="Tema de la unidad"
+                        autoFocus
+                        required
+                        style={estiloCampo}
+                      />
+                      <button type="submit" style={{ backgroundColor: 'var(--accent-purple)', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                        Guardar
+                      </button>
+                      <button type="button" onClick={() => setEdicionUnidad(null)} style={{ backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                        Cancelar
+                      </button>
+                      {errorEdicionUnidad && (
+                        <p role="alert" style={{ width: '100%', fontSize: '13px', color: '#9B1C1C' }}>{errorEdicionUnidad}</p>
+                      )}
+                    </form>
+                  ) : (
+                    <>
+                      <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                        Unidad {unidad.numero}: {unidad.nombre}
+                      </h3>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginLeft: 'auto', marginRight: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErrorEdicionUnidad(null);
+                            setEdicionUnidad({ id: unidad.id, tema: unidad.nombre });
+                          }}
+                          style={{ backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)', cursor: 'pointer' }}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => eliminarUnidad(unidad)}
+                          style={{ backgroundColor: '#FDE8E8', border: '1px solid #F8B4B4', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: '600', color: '#9B1C1C', cursor: 'pointer' }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   {/* Botón para agregar apunte directo a esta unidad con validación */}
                   <label

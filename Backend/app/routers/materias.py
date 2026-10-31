@@ -100,7 +100,17 @@ def editar_unidad_endpoint(usuario_id: int, materia_id: int, unidad_id: int, uni
     return resultado
 
 @router.delete("/{materia_id}/unidades/{unidad_id}", status_code=204)
-def eliminar_unidad_endpoint(usuario_id: int, materia_id: int, unidad_id: int):
+def eliminar_unidad_endpoint(usuario_id: int, materia_id: int, unidad_id: int, background_tasks: BackgroundTasks):
+    if buscar_unidad(usuario_id, materia_id, unidad_id) is None:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    # primero los documentos: la tabla no limpia sus PDF ni sus vectores
+    for documento in listar_documentos(usuario_id, materia_id):
+        if documento["unidad_id"] == unidad_id:
+            documento_id = str(documento["id"])
+            eliminar_documento(usuario_id, documento_id)
+            background_tasks.add_task(eliminar_vectores, documento_id)
+
     eliminado = eliminar_unidad(usuario_id, materia_id, unidad_id)
     if not eliminado:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")

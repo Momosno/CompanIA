@@ -16,7 +16,9 @@ export default function MessageBubble({ message }) {
           fontSize: '14px',
           fontWeight: '500',
           color: 'var(--text-primary)',
-          maxWidth: '650px'
+          maxWidth: '650px',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere'
         }}>
           {message.texto}
         </div>

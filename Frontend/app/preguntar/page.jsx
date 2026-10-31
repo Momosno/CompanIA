@@ -7,6 +7,9 @@ import { API_URL, getUsuarioActual } from '../lib/api';
 
 const CLAVE_HISTORIAL = 'compania_chat_por_materia';
 const ERROR_CHAT = 'No pudimos responder tu pregunta. Probá de nuevo en unos minutos.';
+const MAX_LINEAS = 7;
+const ALTO_LINEA_PX = 20;
+const RELLENO_VERTICAL_PX = 24;
 
 export default function PreguntarPage() {
   const [usuario] = useState(getUsuarioActual);
@@ -17,6 +20,21 @@ export default function PreguntarPage() {
   const [esperando, setEsperando] = useState(false);
   const [confirmacion, setConfirmacion] = useState(null);
   const preguntaEnCurso = useRef(false);
+  const cuadroPregunta = useRef(null);
+
+  // El cuadro crece con el texto hasta MAX_LINEAS; después scrollea adentro
+  useEffect(() => {
+    const cuadro = cuadroPregunta.current;
+    if (!cuadro) return;
+
+    const bordes = cuadro.offsetHeight - cuadro.clientHeight;
+    const altoMaximo = MAX_LINEAS * ALTO_LINEA_PX + RELLENO_VERTICAL_PX + bordes;
+
+    cuadro.style.height = 'auto';
+    const altoNecesario = cuadro.scrollHeight + bordes;
+    cuadro.style.height = `${Math.min(altoNecesario, altoMaximo)}px`;
+    cuadro.style.overflowY = altoNecesario > altoMaximo ? 'auto' : 'hidden';
+  }, [inputPregunta]);
 
   // Al enviar y al recibir la respuesta baja hasta el final; en el resto de los casos no mueve la lectura
   useEffect(() => {
@@ -317,7 +335,6 @@ export default function PreguntarPage() {
         flexDirection: 'column',
         gap: '10px',
         padding: '16px 0',
-        borderTop: '1px solid var(--border-color)',
         backgroundColor: '#efe9df',
       }}>
         {limiteAlcanzado && (
@@ -343,12 +360,18 @@ export default function PreguntarPage() {
           style={{
             display: 'flex',
             gap: '12px',
-            alignItems: 'center',
+            alignItems: 'flex-end',
           }}
         >
-          <input
+          <textarea
+            ref={cuadroPregunta}
+            rows={1}
             value={inputPregunta}
             onChange={(e) => setInputPregunta(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter envía y Shift+Enter agrega una línea
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handlePreguntar(e);
+            }}
             disabled={limiteAlcanzado || !materiaId}
             placeholder={limiteAlcanzado ? 'Alcanzaste el límite diario de preguntas...' : 'Preguntale a tus apuntes...'}
             style={{
@@ -358,6 +381,9 @@ export default function PreguntarPage() {
               borderRadius: '10px',
               padding: '12px 14px',
               fontSize: '14px',
+              fontFamily: 'inherit',
+              lineHeight: `${ALTO_LINEA_PX}px`,
+              resize: 'none',
               color: 'var(--text-primary)',
               outline: 'none',
               opacity: limiteAlcanzado ? 0.7 : 1,
