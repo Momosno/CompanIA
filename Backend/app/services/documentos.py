@@ -1,9 +1,12 @@
+import logging
 import os
 import tempfile
 import uuid
 from datetime import datetime
 
 from app.core.supabase_client import supabase, FakeSupabaseClient
+
+logger = logging.getLogger(__name__)
 
 BUCKET = "Documents"
 
@@ -109,13 +112,19 @@ def eliminar_documento(usuario_id: int, documento_id: str):
         return False
 
     supabase.storage.from_(BUCKET).remove([response.data[0]["storage_path"]])
+    supabase.table("documentos").delete().eq("id", documento_id).execute()
+    return True
+
+# aparte de eliminar_documento porque la primera carga del modelo de embeddings tarda unos 20 s
+def eliminar_vectores(documento_id: str):
+    if _is_mock():
+        return
+
     try:
         from app.ia.vectorstore import vectorstore
         vectorstore.delete(where={"documento_id": documento_id})
     except Exception:
-        pass
-    supabase.table("documentos").delete().eq("id", documento_id).execute()
-    return True
+        logger.exception("No se pudieron borrar los vectores del documento %s", documento_id)
 
 def procesar_documento(documento_id: str):
     if _is_mock():
@@ -138,7 +147,12 @@ def procesar_documento(documento_id: str):
     tabla = supabase.table("documentos")
     try:
         tabla.update({"estado": "processing"}).eq("id", documento_id).execute()
-        fila = tabla.select("storage_path").eq("id", documento_id).execute().data[0]
+        fila = (
+            tabla.select("storage_path, materia_id, unidad_id, nombre_original")
+            .eq("id", documento_id)
+            .execute()
+            .data[0]
+        )
         contenido = supabase.storage.from_(BUCKET).download(fila["storage_path"])
 
         with tempfile.TemporaryDirectory() as carpeta:
@@ -153,7 +167,9 @@ def procesar_documento(documento_id: str):
 
         from app.ia.pdf_index import indexar_documento
         from app.ia.Resuming_Agent import resumir_documento
-        indexar_documento(docs, documento_id)
+        indexar_documento(
+            docs, documento_id, fila["materia_id"], fila["unidad_id"], fila["nombre_original"]
+        )
         resumen = resumir_documento(docs)
         tabla.update(
             {"estado": "ready", "paginas": len(docs), "resumen": resumen, "error": None}

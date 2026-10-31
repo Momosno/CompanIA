@@ -7,12 +7,13 @@ from app.schemas.documento import (
 )
 from app.services.materias import buscar_materia, buscar_unidad
 from app.services.documentos import (
-    crear_documento, listar_documentos, buscar_documento, eliminar_documento, procesar_documento, _is_mock,
+    crear_documento, listar_documentos, buscar_documento, eliminar_documento, eliminar_vectores,
+    procesar_documento, _is_mock,
 )
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/documentos", tags=["documentos"])
 
-MAX_BYTES = 20 * 1024 * 1024  # 20 MB
+MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
 @router.post("/", response_model=DocumentoSubidoResponse, status_code=202)
 def subir(
@@ -24,7 +25,7 @@ def subir(
 ):
     contenido = archivo.file.read(MAX_BYTES + 1)
     if len(contenido) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="El archivo supera los 20 MB")
+        raise HTTPException(status_code=413, detail="El archivo supera los 25 MB")
     if not contenido.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="El archivo no es un PDF")
 
@@ -66,6 +67,7 @@ def preguntar(usuario_id: int, documento_id: UUID, pregunta: PreguntaCreate):
     return responder(pregunta.pregunta, str(documento_id))
 
 @router.delete("/{documento_id}", status_code=204)
-def eliminar(usuario_id: int, documento_id: UUID):
+def eliminar(usuario_id: int, documento_id: UUID, background_tasks: BackgroundTasks):
     if not eliminar_documento(usuario_id, str(documento_id)):
         raise HTTPException(status_code=404, detail="Documento no encontrado")
+    background_tasks.add_task(eliminar_vectores, str(documento_id))
