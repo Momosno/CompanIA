@@ -536,7 +536,6 @@ body {
   flex-direction: column;
   gap: 20px;
   overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .assistant-message-content {

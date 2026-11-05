@@ -5,6 +5,14 @@ from datetime import datetime
 class UsuarioCreate(BaseModel):
     nombre: str
 
+# lo que se espera recibir al editar un usuario
+class UsuarioUpdate(BaseModel):
+    nombre: str
+
+# lo que se devuelve al consultar el cupo diario de preguntas
+class UsoResponse(BaseModel):
+    restantes: int
+
 # lo que se devuelve al cliente (incluye campos generados por la DB)
 class UsuarioResponse(BaseModel):
     id: int

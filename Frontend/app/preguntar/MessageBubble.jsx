@@ -16,7 +16,9 @@ export default function MessageBubble({ message }) {
           fontSize: '14px',
           fontWeight: '500',
           color: 'var(--text-primary)',
-          maxWidth: '650px'
+          maxWidth: '650px',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere'
         }}>
           {message.texto}
         </div>
@@ -45,6 +47,28 @@ export default function MessageBubble({ message }) {
           {message.texto}
         </ReactMarkdown>
       </div>
+
+      {/* Lo agregado por fuera de los apuntes, siempre separado de la respuesta */}
+      {message.complemento && (
+        <div style={{
+          backgroundColor: '#FEF3C7',
+          border: '1px solid #FCD34D',
+          borderRadius: '8px',
+          padding: '10px 12px',
+          color: '#78350F',
+          fontSize: '14px',
+        }}>
+          <span style={{ display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px' }}>
+            El apunte no lo nombra explícitamente. Información agregada para profundizar:
+          </span>
+          <ReactMarkdown
+            remarkPlugins={[remarkMath]}
+            rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: 'ignore' }]]}
+          >
+            {message.complemento}
+          </ReactMarkdown>
+        </div>
+      )}
 
       {/* Citas de fuentes (SCRUM-91) */}
       {message.fuentes && message.fuentes.length > 0 && (
