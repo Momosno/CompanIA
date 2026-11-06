@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import documentos, materias, usuarios
+from app.routers import agenda, documentos, materias, usuarios
 
 app = FastAPI(title="CompañÍA API")
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(usuarios.router)
 app.include_router(materias.router)
 app.include_router(documentos.router)
+app.include_router(agenda.router)
 
 
 @app.get("/")
