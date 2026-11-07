@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pydantic import BaseModel, Field, model_validator
 
 # ---------- eventos de la agenda ----------
@@ -25,6 +25,35 @@ class EventoResponse(BaseModel):
     tipo: str  # "ocupado" o "estudio"
     materia_id: int | None = None
     unidad_id: int | None = None
+
+# ---------- disponibilidad semanal ----------
+
+# compromiso que se repite todas las semanas; `dias` permite cargar varios días de una vez
+# (ej. días hábiles = [0, 1, 2, 3, 4]; 0 = lunes ... 6 = domingo)
+class DisponibilidadCreate(BaseModel):
+    titulo: str = Field(min_length=1, max_length=100)
+    dias: list[int] = Field(min_length=1, max_length=7)
+    hora_inicio: time
+    hora_fin: time
+
+    @model_validator(mode="after")
+    def datos_validos(self):
+        if any(d < 0 or d > 6 for d in self.dias):
+            raise ValueError("los días van de 0 (lunes) a 6 (domingo)")
+        if len(set(self.dias)) != len(self.dias):
+            raise ValueError("hay días repetidos")
+        if self.hora_inicio.tzinfo is not None or self.hora_fin.tzinfo is not None:
+            raise ValueError("las horas van sin zona horaria (hora argentina)")
+        if self.hora_fin <= self.hora_inicio:
+            raise ValueError("hora_fin tiene que ser posterior a hora_inicio")
+        return self
+
+class DisponibilidadResponse(BaseModel):
+    id: int
+    titulo: str
+    dia_semana: int
+    hora_inicio: time
+    hora_fin: time
 
 # ---------- planes de estudio ----------
 
