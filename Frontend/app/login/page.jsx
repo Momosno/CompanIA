@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -40,10 +41,11 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <Link className="login-brand" href="/usuarios">CompañIA</Link>
-
       <div className="login-content">
         <section className="login-panel" aria-labelledby="login-title">
+          <Link className="login-brand" href="/usuarios" aria-label="CompañIA - Volver a los perfiles">
+            <Image src="/logo.png" alt="CompañIA" width={160} height={160} priority />
+          </Link>
           <header className="login-heading">
             <h1 id="login-title">{modo === 'entrar' ? 'Qué bueno verte' : 'Creá tu cuenta'}</h1>
             <p>{modo === 'entrar' ? 'Iniciá sesión para continuar con tu estudio.' : 'Prepará tu espacio para organizar el estudio.'}</p>

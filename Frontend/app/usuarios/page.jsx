@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { API_URL, getUsuarioActual, setUsuarioActual } from '../lib/api';
@@ -69,15 +70,8 @@ export default function UsuariosPage() {
       margin: '0 auto',
       justifyContent: 'space-between'
     }}>
-      <div>
-        <span style={{
-          fontSize: '22px',
-          fontWeight: 'bold',
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.5px'
-        }}>
-          CompañIA
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <Image src="/logo.png" alt="CompañIA" width={180} height={180} priority />
       </div>
 
       <div style={{
