@@ -2,7 +2,8 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from app.core.supabase_client import supabase
 from app.planificador.disponibilidad import expandir_disponibilidad
-from app.planificador.huecos import calcular_huecos
+from app.planificador.huecos import calcular_huecos, con_pausa, primer_hueco
+from app.planificador.reparto import PAUSA
 from app.planificador.metas import contar_bloques, titulo_estudio
 from app.planificador.planes import armar_planes
 
@@ -133,15 +134,30 @@ def _ocupados(usuario_id: int, desde: datetime, hasta: datetime):
     ocupados += [o for o in semanal if o[0] < hasta and o[1] > desde]
     return ocupados
 
+def _ocupados_para_planificar(usuario_id: int, desde: date, hasta: date, sin_pausa_id: int | None = None):
+    """
+    Lo ocupado entre los días `desde` y `hasta` (incluidos), listo para buscar huecos:
+    los bloques de estudio ya agendados se agrandan 30 min para cada lado, así lo nuevo
+    nunca queda pegado a otro bloque de estudio (`sin_pausa_id`: un bloque al que no se
+    le agrega la pausa, ej. el que se está reprogramando). -> [(inicio, fin)]
+    """
+    # se mira un poco antes y después para no perder la pausa de bloques en el borde
+    ventana_ini = datetime.combine(desde, time.min) - PAUSA
+    ventana_fin = datetime.combine(hasta, time.min) + timedelta(days=1) + PAUSA
+    estudio, resto = [], []
+    for f in _eventos_entre(usuario_id, ventana_ini, ventana_fin, "id, inicio, fin, tipo"):
+        tramo = (a_local(de_base(f["inicio"])), a_local(de_base(f["fin"])))
+        (estudio if f["tipo"] == "estudio" and f["id"] != sin_pausa_id else resto).append(tramo)
+    semanal = expandir_disponibilidad(listar_disponibilidad(usuario_id), desde, hasta)
+    return resto + con_pausa(estudio, PAUSA) + [(i, f) for i, f, _ in semanal]
+
 # ---------- planes de estudio ----------
 
 def generar_planes(usuario_id: int, materia: dict, unidades: list[dict], horas: float,
                    desde: date, hasta: date, hora_inicio: int, hora_fin: int,
                    meta_id: int | None = None):
-    # 1) todo lo que ya ocupa tiempo (eventos, estudio ya agendado y disponibilidad semanal)
-    ventana_ini = datetime.combine(desde, time.min)
-    ventana_fin = datetime.combine(hasta, time.min) + timedelta(days=1)
-    ocupados = [(i, f) for i, f, _ in _ocupados(usuario_id, ventana_ini, ventana_fin)]
+    # 1) todo lo que ya ocupa tiempo (eventos, estudio ya agendado con su pausa y disponibilidad semanal)
+    ocupados = _ocupados_para_planificar(usuario_id, desde, hasta)
 
     # 2) huecos libres y 3) reparto en 3 planes
     huecos = calcular_huecos(ocupados, desde, hasta, hora_inicio, hora_fin, ahora=ahora_local())
@@ -193,6 +209,91 @@ def confirmar_estudio(usuario_id: int, materia: dict, unidades: list[dict], bloq
         for i, f in sorted(bloques_locales)
     ]).execute()
     return [a_evento(f) for f in response.data]
+
+# ---------- preferencias (franja horaria para estudiar) ----------
+
+FRANJA_POR_DEFECTO = {"hora_inicio": 8, "hora_fin": 22}
+
+def obtener_preferencias(usuario_id: int):
+    response = (
+        supabase.table("preferencias_agenda")
+        .select("hora_inicio, hora_fin")
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return response.data[0] if response.data else dict(FRANJA_POR_DEFECTO)
+
+def guardar_preferencias(usuario_id: int, hora_inicio: int, hora_fin: int):
+    response = (
+        supabase.table("preferencias_agenda")
+        .upsert({"usuario_id": usuario_id, "hora_inicio": hora_inicio, "hora_fin": hora_fin},
+                on_conflict="usuario_id")
+        .execute()
+    )
+    fila = response.data[0]
+    return {"hora_inicio": fila["hora_inicio"], "hora_fin": fila["hora_fin"]}
+
+# ---------- completar y reprogramar bloques ----------
+
+DIAS_REPROGRAMAR_SIN_META = 7
+
+def buscar_evento(usuario_id: int, evento_id: int):
+    response = (
+        supabase.table("eventos")
+        .select(COLUMNAS)
+        .eq("id", evento_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return a_evento(response.data[0]) if response.data else None
+
+def _actualizar_evento(usuario_id: int, evento_id: int, cambios: dict):
+    response = (
+        supabase.table("eventos")
+        .update(cambios)
+        .eq("id", evento_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return a_evento(response.data[0])
+
+def marcar_completado(usuario_id: int, evento_id: int, completado: bool):
+    return _actualizar_evento(usuario_id, evento_id, {"completado": completado})
+
+def reprogramar_evento(usuario_id: int, evento: dict, desde: date, fecha_examen: date | None,
+                       hora_inicio: int, hora_fin: int):
+    """
+    Mueve el bloque al primer hueco libre con la misma duración, buscando desde `desde`
+    hasta el día anterior al examen (o 7 días si el bloque no es de una meta).
+    Respeta eventos, disponibilidad semanal, la franja horaria del usuario y la pausa de
+    30 min con otros bloques de estudio, y nunca lo deja pisando su horario actual.
+    Tira ValueError si no hay lugar.
+    """
+    inicio, fin = a_local(evento["inicio"]), a_local(evento["fin"])
+    duracion = fin - inicio
+    if fecha_examen is not None:
+        hasta = fecha_examen - timedelta(days=1)
+        donde = "antes del examen"
+    else:
+        hasta = desde + timedelta(days=DIAS_REPROGRAMAR_SIN_META - 1)
+        donde = f"en los próximos {DIAS_REPROGRAMAR_SIN_META} días"
+
+    lugar = None
+    if desde <= hasta:
+        # el horario actual del bloque sigue contando como ocupado (así siempre se mueve),
+        # pero sin pausa: ese lugar va a quedar libre
+        ocupados = _ocupados_para_planificar(usuario_id, desde, hasta, sin_pausa_id=evento["id"])
+        huecos = calcular_huecos(ocupados, desde, hasta, hora_inicio, hora_fin, ahora=ahora_local())
+        lugar = primer_hueco(huecos, duracion)
+    if lugar is None:
+        minutos = int(duracion.total_seconds() // 60)
+        raise ValueError(f"No hay un hueco libre de {minutos} min {donde}")
+
+    nuevo_inicio, nuevo_fin = lugar
+    return _actualizar_evento(usuario_id, evento["id"], {
+        "inicio": a_texto_utc(nuevo_inicio),
+        "fin": a_texto_utc(nuevo_fin),
+    })
 
 # ---------- metas de examen ----------
 

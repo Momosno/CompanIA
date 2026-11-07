@@ -69,3 +69,17 @@ alter table public.eventos
 
 create index if not exists eventos_meta_id_idx
     on public.eventos (meta_id);
+
+-- ---------- Fase 4: franja horaria de cada usuario ----------
+-- Entre qué horas quiere estudiar (ej. quien trabaja de noche: 14 a 24). Sin fila = 8 a 22.
+create table if not exists public.preferencias_agenda (
+    usuario_id bigint primary key references public.usuarios (id) on delete cascade,
+    hora_inicio smallint not null default 8 check (hora_inicio between 0 and 23),
+    hora_fin smallint not null default 22 check (hora_fin between 1 and 24),
+    check (hora_fin > hora_inicio)
+);
+
+alter table public.preferencias_agenda enable row level security;
+
+-- Solo el backend accede a esta tabla (usa la key secreta = service_role)
+grant select, insert, update on public.preferencias_agenda to service_role;

@@ -69,8 +69,9 @@ class PlanCreate(BaseModel):
     horas: float = Field(gt=0, le=100)          # horas de estudio a planificar
     desde: date | None = None                    # primer día en que se puede estudiar
     hasta: date | None = None                    # último día (ej: el día antes del parcial)
-    hora_inicio: int = Field(default=8, ge=0, le=23)   # no estudiar antes de esta hora
-    hora_fin: int = Field(default=22, ge=1, le=24)     # ni después de esta
+    # franja para este pedido; si no se manda, se usa la guardada en /preferencias
+    hora_inicio: int | None = Field(default=None, ge=0, le=23)   # no estudiar antes de esta hora
+    hora_fin: int | None = Field(default=None, ge=1, le=24)      # ni después de esta
 
     @model_validator(mode="after")
     def rangos_validos(self):
@@ -84,7 +85,7 @@ class PlanCreate(BaseModel):
                 raise ValueError("hasta no puede ser anterior a desde")
             if (self.hasta - self.desde).days > 60:
                 raise ValueError("el rango no puede superar los 60 días")
-        if self.hora_fin <= self.hora_inicio:
+        if self.hora_inicio is not None and self.hora_fin is not None and self.hora_fin <= self.hora_inicio:
             raise ValueError("hora_fin tiene que ser mayor que hora_inicio")
         return self
 
@@ -194,3 +195,24 @@ class MetaResponse(BaseModel):
     unidades: list[UnidadResumen]
     bloques_total: int
     bloques_completados: int
+
+# ---------- completar y reprogramar bloques ----------
+
+class EventoUpdate(BaseModel):
+    completado: bool
+
+class ReprogramarCreate(BaseModel):
+    desde: date | None = None   # buscar lugar a partir de este día (por defecto, mañana)
+
+# ---------- preferencias ----------
+
+# franja horaria en la que la persona quiere estudiar (horas enteras, no cruza la medianoche)
+class Preferencias(BaseModel):
+    hora_inicio: int = Field(ge=0, le=23)
+    hora_fin: int = Field(ge=1, le=24)
+
+    @model_validator(mode="after")
+    def franja_valida(self):
+        if self.hora_fin <= self.hora_inicio:
+            raise ValueError("hora_fin tiene que ser mayor que hora_inicio")
+        return self
