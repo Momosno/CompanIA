@@ -214,7 +214,8 @@ Respuesta (200):
 
 - `opciones` trae **siempre 3 planes**, en este orden: **Constante**, **Intensivo** (termina antes), **Progresivo** (va subiendo las horas hacia el final).
 - Los `bloques` ya esquivan todo lo que hay en la agenda y no ofrecen horarios que ya pasaron.
-- Máximo 4 h de estudio por día y 3 h seguidas (después hay descanso).
+- Los bloques duran **60 o 90 min**. Solo aparecen bloques de **30 min** cuando la agenda está apretada (para aprovechar un bache) o para completar un resto (ej. se piden 30 min). Hay **al menos 30 min de pausa** entre dos bloques del mismo día, y **máximo 4 h** de estudio por día.
+- Las `horas` pedidas se redondean hacia arriba a múltiplos de 30 min (mínimo 30 min).
 - Si no entran todas las horas: `completo: false` y `faltan_horas` dice cuántas quedaron afuera → conviene avisarle al usuario ("con tu agenda solo entran X h, ampliá el rango").
 - Si no hay ningún hueco, `bloques` viene vacío.
 - Errores: `404` materia/unidad inexistente · `400` el rango ya pasó · `422` datos inválidos.
