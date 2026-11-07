@@ -3,13 +3,13 @@ from datetime import date, datetime, time, timedelta, timezone
 from app.core.supabase_client import supabase
 from app.planificador.disponibilidad import expandir_disponibilidad
 from app.planificador.huecos import calcular_huecos
+from app.planificador.metas import contar_bloques, titulo_estudio
 from app.planificador.planes import armar_planes
-from app.services.materias import buscar_materia, buscar_unidad
 
 # Argentina es UTC-3 todo el año (no hay horario de verano)
 TZ = timezone(timedelta(hours=-3))
 
-COLUMNAS = "id, titulo, inicio, fin, tipo, materia_id, unidad_id"
+COLUMNAS = "id, titulo, inicio, fin, tipo, materia_id, unidad_id, meta_id, completado"
 
 # ---------- manejo de horas ----------
 # Adentro del planificador todo es hora local sin zona; en la base se guarda en UTC.
@@ -135,8 +135,9 @@ def _ocupados(usuario_id: int, desde: datetime, hasta: datetime):
 
 # ---------- planes de estudio ----------
 
-def generar_planes(usuario_id: int, materia: dict, unidad: dict | None, horas: float,
-                   desde: date, hasta: date, hora_inicio: int, hora_fin: int):
+def generar_planes(usuario_id: int, materia: dict, unidades: list[dict], horas: float,
+                   desde: date, hasta: date, hora_inicio: int, hora_fin: int,
+                   meta_id: int | None = None):
     # 1) todo lo que ya ocupa tiempo (eventos, estudio ya agendado y disponibilidad semanal)
     ventana_ini = datetime.combine(desde, time.min)
     ventana_fin = datetime.combine(hasta, time.min) + timedelta(days=1)
@@ -152,16 +153,19 @@ def generar_planes(usuario_id: int, materia: dict, unidad: dict | None, horas: f
             {"inicio": i.replace(tzinfo=TZ), "fin": f.replace(tzinfo=TZ)} for i, f in plan["bloques"]
         ]
     return {
+        "meta_id": meta_id,
         "materia_id": materia["id"],
         "materia": materia["nombre"],
-        "unidad": unidad["nombre_tema"] if unidad else None,
+        "unidad": unidades[0]["nombre_tema"] if len(unidades) == 1 else None,
+        "unidades": unidades,
         "horas_solicitadas": horas,
         "desde": desde,
         "hasta": hasta,
         "opciones": planes,
     }
 
-def confirmar_estudio(usuario_id: int, materia: dict, unidad: dict | None, bloques: list[dict]):
+def confirmar_estudio(usuario_id: int, materia: dict, unidades: list[dict], bloques: list[dict],
+                      meta_id: int | None = None):
     bloques_locales = [(a_local(b["inicio"]), a_local(b["fin"])) for b in bloques]
 
     # nada puede pisarse con lo que ya hay en la agenda (por si cambió desde que se generó el plan)
@@ -174,9 +178,7 @@ def confirmar_estudio(usuario_id: int, materia: dict, unidad: dict | None, bloqu
                     f"El bloque del {b_ini:%d/%m %H:%M} se pisa con «{e_titulo}». Generá los planes de nuevo."
                 )
 
-    titulo = f"Estudiar {materia['nombre']}"
-    if unidad:
-        titulo += f" – {unidad['nombre_tema']}"
+    titulo = titulo_estudio(materia["nombre"], unidades)
     response = supabase.table("eventos").insert([
         {
             "usuario_id": usuario_id,
@@ -185,8 +187,108 @@ def confirmar_estudio(usuario_id: int, materia: dict, unidad: dict | None, bloqu
             "fin": a_texto_utc(f),
             "tipo": "estudio",
             "materia_id": materia["id"],
-            "unidad_id": unidad["id"] if unidad else None,
+            "unidad_id": unidades[0]["id"] if len(unidades) == 1 else None,
+            "meta_id": meta_id,
         }
         for i, f in sorted(bloques_locales)
     ]).execute()
     return [a_evento(f) for f in response.data]
+
+# ---------- metas de examen ----------
+
+COLUMNAS_META = ("id, materia_id, fecha, hora, unidad_ids, "
+                 "materias(nombre, unidades(id, numero_unidad, nombre_tema))")
+
+def _conteo_bloques(usuario_id: int, meta_ids: list[int]):
+    if not meta_ids:
+        return {}
+    response = (
+        supabase.table("eventos")
+        .select("meta_id, completado")
+        .eq("usuario_id", usuario_id)
+        .eq("tipo", "estudio")
+        .in_("meta_id", meta_ids)
+        .execute()
+    )
+    return contar_bloques(response.data)
+
+def _a_meta(fila: dict, conteo: dict) -> dict:
+    materia = fila.get("materias") or {}
+    por_id = {u["id"]: u for u in materia.get("unidades") or []}
+    # si se borró alguna unidad de la materia, simplemente deja de aparecer
+    unidades = sorted((por_id[i] for i in fila["unidad_ids"] if i in por_id),
+                      key=lambda u: u["numero_unidad"])
+    total, hechos = conteo.get(fila["id"], (0, 0))
+    return {
+        "id": fila["id"],
+        "materia_id": fila["materia_id"],
+        "materia": materia.get("nombre", ""),
+        "fecha": date.fromisoformat(fila["fecha"]),
+        "hora": time.fromisoformat(fila["hora"]) if fila["hora"] else None,
+        "unidades": unidades,
+        "bloques_total": total,
+        "bloques_completados": hechos,
+    }
+
+def listar_metas(usuario_id: int):
+    response = (
+        supabase.table("metas_examen")
+        .select(COLUMNAS_META)
+        .eq("usuario_id", usuario_id)
+        .order("fecha")
+        .order("hora")
+        .execute()
+    )
+    conteo = _conteo_bloques(usuario_id, [f["id"] for f in response.data])
+    return [_a_meta(f, conteo) for f in response.data]
+
+def buscar_meta(usuario_id: int, meta_id: int):
+    response = (
+        supabase.table("metas_examen")
+        .select(COLUMNAS_META)
+        .eq("id", meta_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    if not response.data:
+        return None
+    return _a_meta(response.data[0], _conteo_bloques(usuario_id, [meta_id]))
+
+def _a_fila_meta(datos: dict) -> dict:
+    fila = dict(datos)
+    if "fecha" in fila:
+        fila["fecha"] = fila["fecha"].isoformat()
+    if "hora" in fila:
+        fila["hora"] = fila["hora"].isoformat() if fila["hora"] else None
+    return fila
+
+def crear_meta(usuario_id: int, materia_id: int, fecha: date, hora: time | None, unidad_ids: list[int]):
+    response = supabase.table("metas_examen").insert(_a_fila_meta({
+        "usuario_id": usuario_id,
+        "materia_id": materia_id,
+        "fecha": fecha,
+        "hora": hora,
+        "unidad_ids": unidad_ids,
+    })).execute()
+    return buscar_meta(usuario_id, response.data[0]["id"])
+
+def editar_meta(usuario_id: int, meta_id: int, cambios: dict):
+    (
+        supabase.table("metas_examen")
+        .update(_a_fila_meta(cambios))
+        .eq("id", meta_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return buscar_meta(usuario_id, meta_id)
+
+def eliminar_meta(usuario_id: int, meta_id: int):
+    # sus bloques de estudio se borran solos (FK eventos.meta_id con on delete cascade)
+    response = (
+        supabase.table("metas_examen")
+        .delete()
+        .eq("id", meta_id)
+        .eq("usuario_id", usuario_id)
+        .execute()
+    )
+    return len(response.data) > 0
