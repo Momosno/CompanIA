@@ -40,3 +40,32 @@ alter table public.disponibilidad enable row level security;
 
 -- Solo el backend accede a esta tabla (usa la key secreta = service_role)
 grant select, insert, delete on public.disponibilidad to service_role;
+
+-- ---------- Fase 3: metas de examen (SCRUM-88) ----------
+-- Un parcial / final: fija la materia, las unidades que entran y la fecha (el plan termina el día anterior).
+create table if not exists public.metas_examen (
+    id bigint generated always as identity primary key,
+    usuario_id bigint not null references public.usuarios (id) on delete cascade,
+    materia_id bigint not null references public.materias (id) on delete cascade,
+    fecha date not null,
+    hora time,
+    unidad_ids bigint[] not null default '{}',   -- ids de public.unidades de esa materia
+    created_at timestamptz not null default now()
+);
+
+create index if not exists metas_examen_usuario_id_fecha_idx
+    on public.metas_examen (usuario_id, fecha);
+
+alter table public.metas_examen enable row level security;
+
+-- Solo el backend accede a esta tabla (usa la key secreta = service_role)
+grant select, insert, update, delete on public.metas_examen to service_role;
+
+-- Los bloques de estudio saben de qué meta son (y se borran con ella) y si ya se hicieron
+alter table public.eventos
+    add column if not exists meta_id bigint references public.metas_examen (id) on delete cascade;
+alter table public.eventos
+    add column if not exists completado boolean not null default false;
+
+create index if not exists eventos_meta_id_idx
+    on public.eventos (meta_id);
