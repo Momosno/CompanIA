@@ -3,12 +3,14 @@ from datetime import date
 from fastapi import APIRouter, HTTPException
 from app.schemas.agenda import (
     EventoCreate, EventoResponse, PlanCreate, PlanesResponse, EstudioCreate,
+    DisponibilidadCreate, DisponibilidadResponse,
 )
 from app.services.usuarios import buscar_usuario
 from app.services.materias import buscar_materia, buscar_unidad
 from app.services.agenda import (
     crear_evento, listar_eventos, eliminar_evento, generar_planes, confirmar_estudio,
     ahora_local, a_local,
+    listar_disponibilidad, crear_disponibilidad, eliminar_disponibilidad,
 )
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/agenda", tags=["agenda"])
@@ -47,6 +49,21 @@ def listar(usuario_id: int, desde: date | None = None, hasta: date | None = None
 def eliminar(usuario_id: int, evento_id: int):
     if not eliminar_evento(usuario_id, evento_id):
         raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+@router.get("/disponibilidad", response_model=list[DisponibilidadResponse])
+def ver_disponibilidad(usuario_id: int):
+    _usuario_o_404(usuario_id)
+    return listar_disponibilidad(usuario_id)
+
+@router.post("/disponibilidad", response_model=list[DisponibilidadResponse], status_code=201)
+def agregar_disponibilidad(usuario_id: int, datos: DisponibilidadCreate):
+    _usuario_o_404(usuario_id)
+    return crear_disponibilidad(usuario_id, datos.titulo, datos.dias, datos.hora_inicio, datos.hora_fin)
+
+@router.delete("/disponibilidad/{disponibilidad_id}", status_code=204)
+def borrar_disponibilidad(usuario_id: int, disponibilidad_id: int):
+    if not eliminar_disponibilidad(usuario_id, disponibilidad_id):
+        raise HTTPException(status_code=404, detail="Compromiso no encontrado")
 
 @router.post("/planes", response_model=PlanesResponse)
 def planes(usuario_id: int, datos: PlanCreate):
