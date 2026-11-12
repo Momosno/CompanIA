@@ -1,6 +1,6 @@
 # CompañIA – Guía de la API para Front
 
-Todo lo que necesitan para consumir **documentos** (subir PDF, resumen, preguntas) y **agenda** (huecos libres y planes de estudio).
+Todo lo que necesitan para consumir **documentos** (subir PDF, resumen, preguntas), **agenda** (huecos libres y planes de estudio) y **cuestionarios** (preguntas de práctica generadas con IA).
 Los endpoints de `usuarios` y `materias` los armó otro compañero y no están acá.
 
 Documentación interactiva (para probar a mano): `http://127.0.0.1:8000/docs`
@@ -249,6 +249,99 @@ Errores:
 - `400`: hay bloques que ya pasaron.
 - `422`: bloques que se pisan entre sí, lista vacía (mínimo 1, máximo 200) o datos inválidos.
 - `404`: materia/unidad inexistente.
+
+---
+
+# 3. Cuestionarios
+
+Prefijo: `/usuarios/{usuario_id}/cuestionarios`
+
+Genera preguntas de opción múltiple (siempre 4 opciones; puede haber **1, 2 o 3 correctas**) a partir de los documentos de una materia: de **todos**, de **uno** o de **varios** a elección.
+**No guarda nada**: cada llamada arma un cuestionario nuevo (si se repite el pedido, salen preguntas distintas).
+Solo se usan documentos en estado `ready`.
+
+## Generar un cuestionario — `POST /usuarios/{usuario_id}/cuestionarios/`
+
+```json
+{
+  "materia_id": 1,
+  "documento_ids": null,
+  "cantidad": 10,
+  "dificultad": "mixta",
+  "respuestas_multiples": true
+}
+```
+
+| Campo | Detalle |
+|---|---|
+| `materia_id` | obligatorio |
+| `documento_ids` | opcional, **lista** de ids de documentos. Con 1 id sale de ese documento, con varios sale de esos documentos. Si no se manda (o va `null`), sale de **todos los documentos listos de la materia**. No puede ir vacía |
+| `cantidad` | obligatorio, de 1 a 30. El front decide el largo (sugerencia: corto 5, mediano 10, extenso 20) |
+| `dificultad` | opcional, por defecto `"mixta"`. Valores: `"facil"`, `"media"`, `"dificil"`, `"mixta"` |
+
+| `respuestas_multiples` | opcional, por defecto `true`. Con `true` **la mitad de las preguntas** (redondeando para abajo) tienen varias correctas y el resto una sola (10 preguntas = 5 y 5; 1 pregunta = una sola). Con `false` **todas** tienen una sola correcta |
+
+Con `"mixta"` el reparto es aproximadamente 30 % fáciles, 40 % medias y 30 % difíciles (10 preguntas = 3 / 4 / 3).
+
+Respuesta (200):
+
+```json
+{
+  "materia_id": 1,
+  "materia": "Programación",
+  "documentos": [
+    { "id": "6f1c...-uuid", "nombre": "Funciones.pdf" },
+    { "id": "a2b9...-uuid", "nombre": "Recursion.pdf" }
+  ],
+  "dificultad": "mixta",
+  "respuestas_multiples": true,
+  "cantidad_solicitada": 10,
+  "cantidad": 10,
+  "preguntas": [
+    {
+      "numero": 1,
+      "pregunta": "¿Qué palabra clave se usa para devolver un valor desde una función?",
+      "dificultad": "facil",
+      "opciones": ["yield", "return", "break", "pass"],
+      "correctas": [1],
+      "respuestas_correctas": ["return"],
+      "multiple": false,
+      "explicacion": "return termina la función y devuelve el valor al que la llamó.",
+      "fuente": "Funciones.pdf"
+    }
+  ]
+}
+```
+
+- Con `respuestas_multiples: true`, algunas preguntas tienen **más de una opción correcta** (2 o 3, nunca 0 ni 4). Nunca son todas múltiples: el servidor mantiene el balance. Con `false`, todas tienen exactamente una.
+  - `correctas` es la lista de **posiciones** (0 a 3, en orden) de las opciones correctas dentro de `opciones`.
+  - `respuestas_correctas` es la lista con el **texto** de esas opciones.
+  - `multiple` es `true` cuando hay más de una correcta: en ese caso mostrar **checkboxes** (marcar varias) y, si es `false`, **radio buttons** (una sola). El enunciado de las preguntas múltiples viene redactado en plural ("¿Cuáles de las siguientes...?").
+  - Las opciones ya vienen mezcladas.
+- `documentos` lista los documentos de los que salieron las preguntas (útil para mostrar "Cuestionario de: ...").
+- La corrección la hace el front: la respuesta es correcta solo si el conjunto de opciones marcadas es **exactamente** igual a `correctas` (ni una de menos ni una de más). `explicacion` se puede mostrar después de responder.
+- Las preguntas vienen ordenadas de más fáciles a más difíciles. Se puede mostrar `dificultad` como etiqueta.
+- `fuente` es el documento del que sale la pregunta (puede ser `null`).
+- `cantidad` puede ser **menor** que `cantidad_solicitada` si la IA no logró armar todas: mostrar las que haya.
+- **Tarda**: es una llamada a IA, normalmente entre 5 y 30 segundos según la cantidad. Mostrar un "generando cuestionario...".
+
+Errores:
+- `404` materia inexistente, o algún id de `documento_ids` que no existe en esa materia.
+- `409` algún documento elegido todavía no está listo (el mensaje dice cuál), o la materia no tiene ningún documento listo.
+- `502` falló la IA: mostrar el mensaje y dejar reintentar.
+- `422` datos inválidos (cantidad fuera de 1–30, dificultad inexistente, etc.).
+
+```js
+const res = await fetch(`${API}/usuarios/${usuarioId}/cuestionarios/`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ materia_id: 1, cantidad: 10, dificultad: "mixta" }),
+});
+const cuestionario = await res.json();
+// + documento_ids: [id1, id2] para usar solo algunos documentos
+// corregir: marcadas = [1, 3] (posiciones elegidas)
+// const acierta = JSON.stringify([...marcadas].sort()) === JSON.stringify(pregunta.correctas);
+```
 
 ---
 
