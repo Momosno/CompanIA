@@ -40,3 +40,24 @@ def calcular_huecos(ocupados, desde, hasta, hora_inicio=8, hora_fin=22, ahora=No
         huecos[dia] = [(a, b) for a, b in libres if b - a >= SLOT]
         dia += timedelta(days=1)
     return huecos
+
+
+def primer_hueco(huecos, duracion):
+    """
+    huecos: lo que devuelve calcular_huecos
+    duracion: timedelta que tiene que entrar entera
+    Devuelve (inicio, fin) del primer lugar donde entra, o None si no hay.
+    """
+    for dia in sorted(huecos):
+        for inicio, fin in huecos[dia]:
+            if fin - inicio >= duracion:
+                return inicio, inicio + duracion
+    return None
+
+
+def con_pausa(tramos, pausa):
+    """
+    Agranda cada tramo `pausa` para cada lado. Se usa con los bloques de estudio ya
+    agendados para que lo nuevo quede con un descanso antes y después.
+    """
+    return [(inicio - pausa, fin + pausa) for inicio, fin in tramos]

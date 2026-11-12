@@ -1,22 +1,30 @@
 import math
 
 from app.planificador.reparto import (
-    partir_en_slots, elegir_slots, juntar_en_bloques, repartir, llenar_en_orden,
+    Dia, partir_en_slots, repartir, llenar_en_orden, ajustar_cuotas,
 )
 
-def armar_planes(huecos, horas, max_horas_dia=4, max_seguidas_horas=3):
+MIN_SLOTS = 1  # lo mínimo que se planifica son 30 min
+
+
+def slots_pedidos(horas):
+    # las horas se redondean hacia arriba a múltiplos de 30 min, con mínimo 30 min
+    return max(MIN_SLOTS, math.ceil(round(horas * 2, 6)))
+
+
+def armar_planes(huecos, horas, max_horas_dia=4):
     """
     huecos: lo que devuelve calcular_huecos
     horas: horas de estudio que la persona quiere planificar
     Devuelve 3 opciones de plan (Constante, Intensivo, Progresivo).
+    Los bloques duran 60 o 90 min; los de 30 min solo aparecen cuando la agenda está
+    apretada o para completar un resto. Hay 30 min de pausa entre bloques del mismo día
+    y como mucho `max_horas_dia` horas de estudio por día.
     """
-    max_seguidos = int(max_seguidas_horas * 2)
-    dias = sorted(huecos)
-    slots_por_dia = [partir_en_slots(huecos[d]) for d in dias]
-    capacidades = [
-        min(len(elegir_slots(s, 10**6, max_seguidos)), int(max_horas_dia * 2)) for s in slots_por_dia
-    ]
-    total = math.ceil(horas * 2)
+    fechas = sorted(huecos)
+    dias = [Dia(partir_en_slots(huecos[f]), int(max_horas_dia * 2)) for f in fechas]
+    capacidades = [d.capacidad for d in dias]
+    total = slots_pedidos(horas)
 
     cuotas_por_plan = [
         (
@@ -37,10 +45,11 @@ def armar_planes(huecos, horas, max_horas_dia=4, max_seguidas_horas=3):
     ]
 
     planes = []
-    for nombre, descripcion, cuotas in cuotas_por_plan:
+    for nombre, descripcion, ideales in cuotas_por_plan:
+        cuotas = ajustar_cuotas(ideales, dias, total)
         bloques = []
-        for slots, cuota in zip(slots_por_dia, cuotas):
-            bloques += juntar_en_bloques(elegir_slots(slots, cuota, max_seguidos))
+        for dia, cuota in zip(dias, cuotas):
+            bloques += dia.bloques(cuota)
         planeadas = sum(cuotas) / 2
         planes.append({
             "nombre": nombre,
@@ -49,6 +58,6 @@ def armar_planes(huecos, horas, max_horas_dia=4, max_seguidas_horas=3):
             "horas_planificadas": planeadas,
             "dias_de_estudio": sum(1 for c in cuotas if c > 0),
             "completo": sum(cuotas) >= total,
-            "faltan_horas": max(0.0, round(total / 2 - planeadas, 2)),
+            "faltan_horas": max(0.0, (total - sum(cuotas)) / 2),
         })
     return planes

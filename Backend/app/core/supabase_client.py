@@ -43,8 +43,28 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     supabase = FakeSupabaseClient()
 else:
     try:
+        import httpx
         from supabase import create_client, Client
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        from supabase.lib.client_options import SyncClientOptions
+
+        class _TransporteConReintento(httpx.HTTPTransport):
+            # Si una conexión reusada se cortó (ReadError), las lecturas se reintentan una vez.
+            # Solo GET: reintentar un insert/update/delete podría duplicar el cambio.
+            def handle_request(self, request):
+                try:
+                    return super().handle_request(request)
+                except (httpx.ReadError, httpx.RemoteProtocolError):
+                    if request.method != "GET":
+                        raise
+                    return super().handle_request(request)
+
+        # Un solo cliente HTTP/1.1 compartido por todos los pedidos (FastAPI los atiende en hilos).
+        # Con HTTP/2 todos los hilos comparten una misma conexión, y en Windows dio errores
+        # intermitentes (WinError 10035) cuando el front pedía varias cosas a la vez.
+        _http = httpx.Client(http2=False, timeout=120, follow_redirects=True,
+                             transport=_TransporteConReintento())
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY,
+                                         options=SyncClientOptions(httpx_client=_http))
     except Exception as e:
         print(f"[SUPABASE] Error al conectar a Supabase: {e}. Usando mock.")
         supabase = FakeSupabaseClient()
