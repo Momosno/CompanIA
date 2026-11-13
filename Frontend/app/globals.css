@@ -345,6 +345,12 @@ body {
   z-index: 1;
 }
 
+.sidebar-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
 .content-area {
   flex: 1;
   min-width: 0;
@@ -968,13 +974,27 @@ body {
     border-top: 1px solid var(--border-color);
     background: rgba(250, 246, 240, 0.97);
     backdrop-filter: blur(12px);
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
   }
 
   .sidebar > div:first-child {
     display: contents;
   }
 
-  .sidebar-brand,
+  /* en celular el logo va chiquito a la izquierda de la barra de abajo */
+  .sidebar-brand {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0 4px;
+  }
+
+  .sidebar-brand img {
+    width: 40px;
+    height: 40px;
+  }
+
   .sidebar-user {
     display: none;
   }
@@ -983,7 +1003,8 @@ body {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 
   .nav-link {
