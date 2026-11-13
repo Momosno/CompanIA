@@ -10,7 +10,7 @@ import {
 
 const LARGOS = [
   { cantidad: 5, nombre: 'Corto', espera: 'hasta 30 s' },
-  { cantidad: 10, nombre: 'Mediano', espera: 'hasta 30 s' },
+  { cantidad: 15, nombre: 'Mediano', espera: 'hasta 45 s' },
   { cantidad: 30, nombre: 'Largo', espera: 'hasta 1 min' },
 ];
 const DIFICULTADES = [

@@ -315,7 +315,7 @@ Solo se usan documentos en estado `ready`.
 | `materia_id` | obligatorio |
 | `unidad_ids` | opcional, **lista** de ids de unidades de la materia. Usa los documentos `ready` de esas unidades. No puede ir vacía ni junto con `documento_ids` (`422`) |
 | `documento_ids` | opcional, **lista** de ids de documentos. Con 1 id sale de ese documento, con varios sale de esos documentos. Si no se manda ni esto ni `unidad_ids`, sale de **todos los documentos listos de la materia**. No puede ir vacía |
-| `cantidad` | obligatorio, de 1 a 30. El front decide el largo (en la pantalla Practicar: corto 5, mediano 10, largo 30) |
+| `cantidad` | obligatorio, de 1 a 30. El front decide el largo (en la pantalla Practicar: corto 5, mediano 15, largo 30) |
 | `dificultad` | opcional, por defecto `"mixta"`. Valores: `"facil"`, `"media"`, `"dificil"`, `"mixta"` |
 | `respuestas_multiples` | opcional, por defecto `true`. Con `true` **la mitad de las preguntas** (redondeando para abajo) tienen varias correctas y el resto una sola (10 preguntas = 5 y 5; 1 pregunta = una sola). Con `false` **todas** tienen una sola correcta |
 
