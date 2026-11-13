@@ -1,17 +1,27 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # lo que se espera recibir para armar un cuestionario
 class CuestionarioCreate(BaseModel):
     materia_id: int
-    # documentos a usar: uno o varios. Si no viene, usa todos los documentos listos de la materia
+    # qué evaluar: unidades (usa sus documentos listos) o documentos sueltos, no las dos cosas.
+    # Si no viene ninguna, usa todos los documentos listos de la materia
+    unidad_ids: list[int] | None = Field(default=None, min_length=1, max_length=50)
     documento_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=50)
     cantidad: int = Field(ge=1, le=30)
     dificultad: Literal["facil", "media", "dificil", "mixta"] = "mixta"
     # True: la mitad de las preguntas pueden tener varias correctas. False: todas tienen una sola
     respuestas_multiples: bool = True
+
+    @model_validator(mode="after")
+    def unidades_o_documentos(self):
+        if self.unidad_ids is not None and self.documento_ids is not None:
+            raise ValueError("mandá unidad_ids o documento_ids, no los dos")
+        if self.unidad_ids is not None:
+            self.unidad_ids = list(dict.fromkeys(self.unidad_ids))  # sin repetidos
+        return self
 
 class PreguntaCuestionario(BaseModel):
     numero: int
@@ -23,6 +33,10 @@ class PreguntaCuestionario(BaseModel):
     multiple: bool                   # True si hay más de una correcta (hay que marcar varias)
     explicacion: str
     fuente: str | None = None  # nombre del documento del que sale
+    # de dónde sale la pregunta (None si no se pudo saber)
+    documento_id: UUID | None = None
+    unidad_id: int | None = None
+    unidad: str | None = None  # "U3 · Derivadas"
 
 class DocumentoUsado(BaseModel):
     id: UUID

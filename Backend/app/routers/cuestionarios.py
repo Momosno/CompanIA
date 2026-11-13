@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.cuestionario import CuestionarioCreate, CuestionarioResponse
 from app.services.materias import buscar_materia
-from app.services.cuestionarios import crear_cuestionario
+from app.services.cuestionarios import UnidadNoEncontrada, crear_cuestionario
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/cuestionarios", tags=["cuestionarios"])
 
@@ -15,7 +15,10 @@ def crear(usuario_id: int, datos: CuestionarioCreate):
             usuario_id, materia,
             [str(i) for i in datos.documento_ids] if datos.documento_ids else None,
             datos.cantidad, datos.dificultad, datos.respuestas_multiples,
+            datos.unidad_ids,
         )
+    except UnidadNoEncontrada as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except RuntimeError as e:
