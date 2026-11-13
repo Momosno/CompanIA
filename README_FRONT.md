@@ -294,8 +294,8 @@ La lógica de cálculo vive en `app/planificador/` como funciones puras (sin Sup
 
 Prefijo: `/usuarios/{usuario_id}/cuestionarios`
 
-Genera preguntas de opción múltiple (siempre 4 opciones; puede haber **1, 2 o 3 correctas**) a partir de los documentos de una materia: de **todos**, de **uno** o de **varios** a elección.
-**No guarda nada**: cada llamada arma un cuestionario nuevo (si se repite el pedido, salen preguntas distintas).
+Genera preguntas de opción múltiple (siempre 4 opciones; puede haber **1, 2 o 3 correctas**) a partir de los documentos de una materia: por **unidades**, de **todos** los documentos, de **uno** o de **varios** a elección.
+**No guarda nada**: cada llamada arma un cuestionario nuevo (si se repite el pedido, salen preguntas distintas). La corrección también es una llamada aparte que no guarda nada (`POST /corregir`).
 Solo se usan documentos en estado `ready`.
 
 ## Generar un cuestionario — `POST /usuarios/{usuario_id}/cuestionarios/`
@@ -303,7 +303,7 @@ Solo se usan documentos en estado `ready`.
 ```json
 {
   "materia_id": 1,
-  "documento_ids": null,
+  "unidad_ids": [3, 5],
   "cantidad": 10,
   "dificultad": "mixta",
   "respuestas_multiples": true
@@ -313,10 +313,10 @@ Solo se usan documentos en estado `ready`.
 | Campo | Detalle |
 |---|---|
 | `materia_id` | obligatorio |
-| `documento_ids` | opcional, **lista** de ids de documentos. Con 1 id sale de ese documento, con varios sale de esos documentos. Si no se manda (o va `null`), sale de **todos los documentos listos de la materia**. No puede ir vacía |
-| `cantidad` | obligatorio, de 1 a 30. El front decide el largo (sugerencia: corto 5, mediano 10, extenso 20) |
+| `unidad_ids` | opcional, **lista** de ids de unidades de la materia. Usa los documentos `ready` de esas unidades. No puede ir vacía ni junto con `documento_ids` (`422`) |
+| `documento_ids` | opcional, **lista** de ids de documentos. Con 1 id sale de ese documento, con varios sale de esos documentos. Si no se manda ni esto ni `unidad_ids`, sale de **todos los documentos listos de la materia**. No puede ir vacía |
+| `cantidad` | obligatorio, de 1 a 30. El front decide el largo (en la pantalla Practicar: corto 5, mediano 15, largo 30) |
 | `dificultad` | opcional, por defecto `"mixta"`. Valores: `"facil"`, `"media"`, `"dificil"`, `"mixta"` |
-
 | `respuestas_multiples` | opcional, por defecto `true`. Con `true` **la mitad de las preguntas** (redondeando para abajo) tienen varias correctas y el resto una sola (10 preguntas = 5 y 5; 1 pregunta = una sola). Con `false` **todas** tienen una sola correcta |
 
 Con `"mixta"` el reparto es aproximadamente 30 % fáciles, 40 % medias y 30 % difíciles (10 preguntas = 3 / 4 / 3).
@@ -345,7 +345,10 @@ Respuesta (200):
       "respuestas_correctas": ["return"],
       "multiple": false,
       "explicacion": "return termina la función y devuelve el valor al que la llamó.",
-      "fuente": "Funciones.pdf"
+      "fuente": "Funciones.pdf",
+      "documento_id": "6f1c...-uuid",
+      "unidad_id": 3,
+      "unidad": "U1 · Funciones"
     }
   ]
 }
@@ -357,17 +360,17 @@ Respuesta (200):
   - `multiple` es `true` cuando hay más de una correcta: en ese caso mostrar **checkboxes** (marcar varias) y, si es `false`, **radio buttons** (una sola). El enunciado de las preguntas múltiples viene redactado en plural ("¿Cuáles de las siguientes...?").
   - Las opciones ya vienen mezcladas.
 - `documentos` lista los documentos de los que salieron las preguntas (útil para mostrar "Cuestionario de: ...").
-- La corrección la hace el front: la respuesta es correcta solo si el conjunto de opciones marcadas es **exactamente** igual a `correctas` (ni una de menos ni una de más). `explicacion` se puede mostrar después de responder.
+- La corrección la hace el backend con `POST /corregir` (ver abajo). `explicacion` se puede mostrar después de responder.
 - Las preguntas vienen ordenadas de más fáciles a más difíciles. Se puede mostrar `dificultad` como etiqueta.
-- `fuente` es el documento del que sale la pregunta (puede ser `null`).
+- `fuente` es el nombre del documento del que sale la pregunta; `documento_id`, `unidad_id` y `unidad` (`"U{numero} · {tema}"`) dicen de dónde sale. Cualquiera puede ser `null` si no se pudo saber (ej. el documento no tiene unidad). Referencia sugerida: "Sale de *Funciones.pdf* · U1 · Funciones" (no hay número de página).
 - `cantidad` puede ser **menor** que `cantidad_solicitada` si la IA no logró armar todas: mostrar las que haya.
 - **Tarda**: es una llamada a IA, normalmente entre 5 y 30 segundos según la cantidad. Mostrar un "generando cuestionario...".
 
 Errores:
-- `404` materia inexistente, o algún id de `documento_ids` que no existe en esa materia.
-- `409` algún documento elegido todavía no está listo (el mensaje dice cuál), o la materia no tiene ningún documento listo.
+- `404` materia inexistente, alguna unidad de `unidad_ids` que no es de la materia ("Unidad no encontrada en esta materia"), o algún id de `documento_ids` que no existe en esa materia.
+- `409` algún documento elegido todavía no está listo (el mensaje dice cuál), las unidades elegidas no tienen documentos listos, o la materia no tiene ningún documento listo.
 - `502` falló la IA: mostrar el mensaje y dejar reintentar.
-- `422` datos inválidos (cantidad fuera de 1–30, dificultad inexistente, etc.).
+- `422` datos inválidos (cantidad fuera de 1–30, dificultad inexistente, `unidad_ids` y `documento_ids` juntos, etc.).
 
 ```js
 const res = await fetch(`${API}/usuarios/${usuarioId}/cuestionarios/`, {
@@ -376,10 +379,53 @@ const res = await fetch(`${API}/usuarios/${usuarioId}/cuestionarios/`, {
   body: JSON.stringify({ materia_id: 1, cantidad: 10, dificultad: "mixta" }),
 });
 const cuestionario = await res.json();
-// + documento_ids: [id1, id2] para usar solo algunos documentos
-// corregir: marcadas = [1, 3] (posiciones elegidas)
-// const acierta = JSON.stringify([...marcadas].sort()) === JSON.stringify(pregunta.correctas);
+// + unidad_ids: [3, 5] para evaluar unidades, o documento_ids: [id1, id2] para algunos documentos
 ```
+
+## Corregir — `POST /usuarios/{usuario_id}/cuestionarios/corregir`
+
+Recibe las preguntas **tal cual vinieron** de `POST /` y lo que marcó la persona. Devuelve el puntaje, el desglose y los puntos débiles. **No guarda nada.**
+
+```json
+{
+  "materia_id": 1,
+  "preguntas": [ /* las de la respuesta de POST /, sin cambios */ ],
+  "respuestas": [
+    { "numero": 1, "marcadas": [1] },
+    { "numero": 2, "marcadas": [0, 3] }
+  ]
+}
+```
+
+- `marcadas`: posiciones (0 a 3) elegidas, sin repetidos. Una pregunta que no aparece en `respuestas` (o con `marcadas: []`) cuenta como **sin responder**.
+- **Regla**: una pregunta está bien solo si lo marcado es **exactamente** `correctas`. Marcar de menos, de más o no responder es error. No hay puntaje parcial.
+
+Respuesta (200):
+
+```json
+{
+  "aciertos": 7,
+  "total": 10,
+  "porcentaje": 70.0,
+  "detalle": [
+    {
+      "numero": 1, "pregunta": "...", "opciones": ["...", "...", "...", "..."],
+      "acertada": false, "respondida": true,
+      "marcadas": [0], "correctas": [1], "respuestas_correctas": ["return"],
+      "explicacion": "...", "fuente": "Funciones.pdf",
+      "documento_id": "6f1c...-uuid", "unidad_id": 3, "unidad": "U1 · Funciones"
+    }
+  ],
+  "puntos_debiles": [
+    { "unidad_id": 3, "unidad": "U1 · Funciones", "errores": 2, "total": 3, "porcentaje_error": 66.7, "preguntas": [1, 4] }
+  ]
+}
+```
+
+- `detalle` va en el orden de `numero` e incluye **todas** las preguntas.
+- `puntos_debiles`: solo las unidades con al menos un error, de la **peor a la mejor** (por % de error; si empatan, la de más errores primero). Las preguntas sin unidad se juntan en `"unidad": "Sin unidad asignada"` con `unidad_id: null`. Si todo está bien, viene vacía.
+
+Errores: `404` materia inexistente · `422` posiciones fuera de 0–3 o repetidas, respuestas para un `numero` que no está en `preguntas`, o preguntas con el mismo `numero`.
 
 ---
 
