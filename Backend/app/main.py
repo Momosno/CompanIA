@@ -8,7 +8,11 @@ app = FastAPI(title="CompañÍA API")
 # Habilitar CORS para permitir peticiones desde el frontend (Next.js en localhost:3000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://compan-ia-psi.vercel.app/",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
