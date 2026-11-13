@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import MessageBubble from './MessageBubble';
 import DialogoConfirmacion from '../DialogoConfirmacion';
 import { API_URL, getUsuarioActual, leerEventos } from '../lib/api';
@@ -11,12 +12,25 @@ const MAX_LINEAS = 7;
 const ALTO_LINEA_PX = 20;
 const RELLENO_VERTICAL_PX = 24;
 
+// useSearchParams necesita un Suspense alrededor para que la página se pueda prerenderizar
 export default function PreguntarPage() {
+  return (
+    <Suspense fallback={null}>
+      <Preguntar />
+    </Suspense>
+  );
+}
+
+function Preguntar() {
+  // ?materia=1&q=texto (ej. desde "Preguntar sobre esto" en Practicar): elige la materia
+  // y deja el texto escrito en el cuadro, sin enviarlo
+  const parametros = useSearchParams();
+  const materiaPedida = Number(parametros.get('materia')) || null;
   const [usuario] = useState(getUsuarioActual);
   const [materiasDisponibles, setMateriasDisponibles] = useState([]);
   const [materiaId, setMateriaId] = useState(null);
   const [preguntasRestantes, setPreguntasRestantes] = useState(null);
-  const [inputPregunta, setInputPregunta] = useState('');
+  const [inputPregunta, setInputPregunta] = useState(() => parametros.get('q') || '');
   const [esperando, setEsperando] = useState(false);
   const [confirmacion, setConfirmacion] = useState(null);
   const preguntaEnCurso = useRef(false);
@@ -51,13 +65,14 @@ export default function PreguntarPage() {
       .then((materiasData) => {
         if (materiasData && materiasData.length > 0) {
           setMateriasDisponibles(materiasData.map((m) => ({ id: m.id, nombre: m.nombre })));
-          setMateriaId(materiasData[0].id);
+          const pedida = materiasData.find((m) => m.id === materiaPedida);
+          setMateriaId(pedida ? pedida.id : materiasData[0].id);
         }
       })
       .catch((err) => {
         console.warn('No se pudieron cargar las materias:', err);
       });
-  }, [usuario]);
+  }, [usuario, materiaPedida]);
 
   // Cupo de hoy: se relee al volver a la ventana porque puede cambiar por fuera
   // de esta pantalla (otra pestaña, la tabla o el cambio de día)

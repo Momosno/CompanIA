@@ -1,40 +1,6 @@
-import { API_URL, getUsuarioActual } from './api';
+import { pedirApi as pedir } from './api';
 
 // ---------- llamadas a la API de agenda (/usuarios/{id}/agenda/...) ----------
-
-// El backend responde `detail` como texto (errores nuestros) o como lista (validación de FastAPI)
-function mensajeDeError(detail, status) {
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail) && detail.length > 0) {
-    return detail.map((d) => String(d.msg || '').replace(/^Value error, /, '')).join(' · ');
-  }
-  return `Algo salió mal (error ${status}). Probá de nuevo.`;
-}
-
-async function pedir(ruta, { method = 'GET', body } = {}) {
-  const usuario = getUsuarioActual();
-  if (!usuario) throw new Error('No hay un usuario seleccionado.');
-
-  let respuesta;
-  try {
-    respuesta = await fetch(`${API_URL}/usuarios/${usuario.id}${ruta}`, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error('No se pudo conectar con el servidor. ¿Está levantado el backend?');
-  }
-
-  if (respuesta.status === 204) return null;
-  const datos = await respuesta.json().catch(() => null);
-  if (!respuesta.ok) {
-    const error = new Error(mensajeDeError(datos?.detail, respuesta.status));
-    error.status = respuesta.status;
-    throw error;
-  }
-  return datos;
-}
 
 const conParametros = (ruta, parametros) => {
   const query = new URLSearchParams(Object.entries(parametros).filter(([, v]) => v != null));

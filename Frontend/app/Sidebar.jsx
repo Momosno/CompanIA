@@ -18,7 +18,7 @@ export default function Sidebar({ usuario }) {
   return (
     <aside className="sidebar">
       <div>
-        <div className="sidebar-brand" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
+        <div className="sidebar-brand">
           <Link href="/" aria-label="CompañIA - Inicio">
             <Image src="/logo.png" alt="CompañIA" width={140} height={140} priority />
           </Link>
