@@ -310,7 +310,7 @@ export default function Home() {
 
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <Link
-                href="/practicar"
+                href={`/practicar?materia=${proximaMeta.materia_id}`}
                 style={{
                   backgroundColor: 'var(--accent-purple)',
                   color: '#FFFFFF',

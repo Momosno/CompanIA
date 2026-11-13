@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import DialogoConfirmacion from '../DialogoConfirmacion';
 import { getUsuarioActual } from '../lib/api';
 import {
@@ -33,7 +34,18 @@ function contarListos(documentos) {
   return cuenta;
 }
 
+// useSearchParams necesita un Suspense alrededor para que la página se pueda prerenderizar
 export default function PracticarPage() {
+  return (
+    <Suspense fallback={null}>
+      <Practicar />
+    </Suspense>
+  );
+}
+
+function Practicar() {
+  // ?materia=1 (ej. desde "Esta noche"): arranca con esa materia elegida
+  const materiaPedida = Number(useSearchParams().get('materia')) || null;
   const [usuario] = useState(getUsuarioActual);
   const [paso, setPaso] = useState('armar'); // armar | rendir | resultados
 
@@ -87,7 +99,8 @@ export default function PracticarPage() {
     listarMaterias()
       .then((lista) => {
         setMaterias(lista);
-        elegirMateria(lista[0]?.id ?? null, lista);
+        const pedida = lista.find((m) => m.id === materiaPedida);
+        elegirMateria((pedida || lista[0])?.id ?? null, lista);
       })
       .catch((err) => setErrorCarga(err.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se carga una sola vez al abrir la página
