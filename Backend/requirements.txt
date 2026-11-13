@@ -1,3 +1,6 @@
+# torch solo CPU: la versión de PyPI trae CUDA (~2.5 GB) y el build de Railway se corta
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
