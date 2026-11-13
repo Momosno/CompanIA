@@ -1,15 +1,32 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.cuestionario import CuestionarioCreate, CuestionarioResponse
+from app.evaluacion.correccion import corregir
+from app.schemas.cuestionario import (
+    CorreccionCreate, CorreccionResponse, CuestionarioCreate, CuestionarioResponse,
+)
 from app.services.materias import buscar_materia
 from app.services.cuestionarios import UnidadNoEncontrada, crear_cuestionario
 
 router = APIRouter(prefix="/usuarios/{usuario_id}/cuestionarios", tags=["cuestionarios"])
 
-@router.post("/", response_model=CuestionarioResponse)
-def crear(usuario_id: int, datos: CuestionarioCreate):
-    materia = buscar_materia(usuario_id, datos.materia_id)
+def _materia_o_404(usuario_id: int, materia_id: int):
+    materia = buscar_materia(usuario_id, materia_id)
     if materia is None:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
+    return materia
+
+# /corregir va antes que cualquier ruta con parámetro, para que no la confunda con un id
+@router.post("/corregir", response_model=CorreccionResponse)
+def corregir_cuestionario(usuario_id: int, datos: CorreccionCreate):
+    # no guarda nada: recibe las preguntas y lo que marcó la persona, y devuelve el resultado
+    _materia_o_404(usuario_id, datos.materia_id)
+    return corregir(
+        [p.model_dump(mode="json") for p in datos.preguntas],
+        [r.model_dump() for r in datos.respuestas],
+    )
+
+@router.post("/", response_model=CuestionarioResponse)
+def crear(usuario_id: int, datos: CuestionarioCreate):
+    materia = _materia_o_404(usuario_id, datos.materia_id)
     try:
         resultado = crear_cuestionario(
             usuario_id, materia,

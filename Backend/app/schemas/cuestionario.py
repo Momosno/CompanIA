@@ -38,6 +38,69 @@ class PreguntaCuestionario(BaseModel):
     unidad_id: int | None = None
     unidad: str | None = None  # "U3 · Derivadas"
 
+# ---------- corrección ----------
+
+class RespuestaPregunta(BaseModel):
+    numero: int
+    marcadas: list[int] = Field(default=[], max_length=4)   # posiciones elegidas (0 a 3); vacía = sin responder
+
+    @model_validator(mode="after")
+    def posiciones_validas(self):
+        if any(m < 0 or m > 3 for m in self.marcadas):
+            raise ValueError("las posiciones marcadas van de 0 a 3")
+        if len(set(self.marcadas)) != len(self.marcadas):
+            raise ValueError("hay posiciones marcadas repetidas")
+        return self
+
+# lo que se espera recibir para corregir: las preguntas tal cual vinieron y lo que marcó la persona
+class CorreccionCreate(BaseModel):
+    materia_id: int
+    preguntas: list[PreguntaCuestionario] = Field(min_length=1, max_length=30)
+    respuestas: list[RespuestaPregunta] = Field(default=[], max_length=30)
+
+    @model_validator(mode="after")
+    def numeros_validos(self):
+        numeros = [p.numero for p in self.preguntas]
+        if len(set(numeros)) != len(numeros):
+            raise ValueError("hay preguntas con el mismo número")
+        respondidas = [r.numero for r in self.respuestas]
+        if len(set(respondidas)) != len(respondidas):
+            raise ValueError("hay más de una respuesta para la misma pregunta")
+        sobran = sorted(set(respondidas) - set(numeros))
+        if sobran:
+            raise ValueError(f"hay respuestas para preguntas que no existen: {sobran}")
+        return self
+
+class PreguntaCorregida(BaseModel):
+    numero: int
+    pregunta: str | None = None
+    opciones: list[str]
+    acertada: bool
+    respondida: bool
+    marcadas: list[int]
+    correctas: list[int]
+    respuestas_correctas: list[str]
+    explicacion: str
+    fuente: str | None = None
+    documento_id: UUID | None = None
+    unidad_id: int | None = None
+    unidad: str | None = None
+
+class PuntoDebil(BaseModel):
+    unidad_id: int | None = None   # None = preguntas sin unidad asignada
+    unidad: str
+    errores: int
+    total: int
+    porcentaje_error: float
+    preguntas: list[int]           # números de las preguntas con error
+
+class CorreccionResponse(BaseModel):
+    aciertos: int
+    total: int
+    porcentaje: float
+    detalle: list[PreguntaCorregida]
+    puntos_debiles: list[PuntoDebil]   # de la unidad más floja a la menos floja
+
 class DocumentoUsado(BaseModel):
     id: UUID
     nombre: str
