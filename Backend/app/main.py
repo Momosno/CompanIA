@@ -5,14 +5,16 @@ from app.routers import agenda, documentos, materias, usuarios, cuestionarios
 
 app = FastAPI(title="CompañÍA API")
 
-# Habilitar CORS para permitir peticiones desde el frontend (Next.js en localhost:3000)
+# Habilitar CORS para el frontend: local, producción y los previews de Vercel.
+# Ojo: los orígenes van sin "/" al final, si no el navegador no los reconoce.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://compan-ia-psi.vercel.app/",
+        "https://compan-ia-psi.vercel.app",
     ],
+    allow_origin_regex=r"https://compan-[a-z0-9-]+-momosnos-projects\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
