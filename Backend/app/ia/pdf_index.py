@@ -1,6 +1,8 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.ia.vectorstore import vectorstore
 
+TANDA = 50  # fragmentos por llamada a la API de embeddings
+
 
 def indexar_documento(docs, documento_id, materia_id, unidad_id, nombre_documento):
     chunks = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100).split_documents(docs)
@@ -10,7 +12,9 @@ def indexar_documento(docs, documento_id, materia_id, unidad_id, nombre_document
         chunk.metadata["unidad_id"] = unidad_id
         chunk.metadata["nombre_documento"] = nombre_documento
     ids = [f"{documento_id}-{i}" for i in range(len(chunks))]
-    vectorstore.add_documents(chunks, ids=ids)
+    # de a tandas, para no pasarse del límite de tokens por minuto de la API
+    for i in range(0, len(chunks), TANDA):
+        vectorstore.add_documents(chunks[i:i + TANDA], ids=ids[i:i + TANDA])
     return len(chunks)
 
 

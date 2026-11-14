@@ -1,3 +1,4 @@
+import os
 import re
 import dotenv
 from langchain_anthropic import ChatAnthropic
@@ -7,7 +8,7 @@ dotenv.load_dotenv()
 # max_tokens alto a propósito: el modelo razona antes de escribir y eso cuenta contra el límite
 # (con 500 la respuesta puede salir cortada o vacía)
 model = ChatAnthropic(model="claude-haiku-5-5", max_tokens=2000)
-UMBRAL = 1.35
+UMBRAL = float(os.getenv("UMBRAL", "1.3"))
 PROMPT = """
 Sos un tutor que ayuda a estudiantes universitarios a entender el material de su materia.
 Vas a recibir fragmentos de los apuntes, cada uno marcado con [Página N], y una pregunta.

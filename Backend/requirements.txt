@@ -46,5 +46,6 @@ langchain-community
 langchain-text-splitters
 langchain-huggingface
 langchain-chroma
+langchain-openai
 sentence-transformers
 pytest==9.2.0
